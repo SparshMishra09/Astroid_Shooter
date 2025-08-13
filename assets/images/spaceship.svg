@@ -1,0 +1,11 @@
+<svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <!-- Spaceship body -->
+  <path d="M25 5 L35 40 L25 35 L15 40 L25 5" fill="#4a7aff" stroke="#2c3e50" stroke-width="1.5"/>
+  <!-- Spaceship wings -->
+  <path d="M15 30 L5 40 L15 35 Z" fill="#3498db" stroke="#2c3e50" stroke-width="1.5"/>
+  <path d="M35 30 L45 40 L35 35 Z" fill="#3498db" stroke="#2c3e50" stroke-width="1.5"/>
+  <!-- Spaceship window -->
+  <circle cx="25" cy="20" r="3" fill="#ecf0f1" stroke="#2c3e50" stroke-width="1"/>
+  <!-- Engine flames -->
+  <path d="M22 40 L25 50 L28 40" fill="#e74c3c" stroke="#c0392b" stroke-width="1"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg width="10" height="20" viewBox="0 0 10 20" xmlns="http://www.w3.org/2000/svg">
+  <!-- Bullet body -->
+  <rect x="3" y="2" width="4" height="16" rx="2" fill="#f1c40f" stroke="#e67e22" stroke-width="1"/>
+  <!-- Bullet tip -->
+  <circle cx="5" cy="2" r="2" fill="#e74c3c" stroke="#c0392b" stroke-width="1"/>
+  <!-- Bullet trail -->
+  <path d="M3 18 L2 20 L8 20 L7 18" fill="#e67e22" stroke="#d35400" stroke-width="0.5"/>
+</svg>
