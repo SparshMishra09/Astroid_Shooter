@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/score_service.dart';
+import '../models/game_models.dart';
 import 'game_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -51,11 +52,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     });
   }
   
-  // Start the game
-  void _startGame() {
+  // Start the game with specific mode
+  void _startGame(GameMode gameMode) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => const GameScreen(),
+        builder: (context) => GameScreen(gameMode: gameMode),
       ),
     ).then((_) {
       // Refresh high score when returning from game screen
@@ -131,20 +132,52 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 40),
                 
-                // Play button
+                // Game mode selection
+                const Text(
+                  'SELECT GAME MODE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                // Classic Mode Button
                 ElevatedButton(
-                  onPressed: _startGame,
+                  onPressed: () => _startGame(GameMode.classic),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
-                    padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                    backgroundColor: Colors.blue,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(25),
                     ),
                   ),
                   child: const Text(
-                    'PLAY',
+                    'CLASSIC MODE',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                
+                // Survival Mode Button
+                ElevatedButton(
+                  onPressed: () => _startGame(GameMode.survival),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                  ),
+                  child: const Text(
+                    'SURVIVAL MODE',
+                    style: TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
@@ -172,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                       SizedBox(height: 10),
                       Text(
-                        '• Drag to move your spaceship\n• Spaceship shoots automatically\n• Destroy asteroids to score points\n• Avoid asteroid collisions',
+                        '• Drag to move your spaceship\n• Spaceship shoots automatically\n• Destroy asteroids to score points\n• Avoid asteroid collisions\n\nCLASSIC: Original gameplay\nSURVIVAL: Power-ups & endless waves!',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,

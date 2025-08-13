@@ -7,7 +7,9 @@ import '../models/game_models.dart';
 import '../services/score_service.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({Key? key}) : super(key: key);
+  final GameMode gameMode;
+  
+  const GameScreen({Key? key, this.gameMode = GameMode.classic}) : super(key: key);
 
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -47,6 +49,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   
   // Animation controllers for visual effects
   late AnimationController _shakeController;
+  
+  // Power-up system (only for Survival mode)
+  List<PowerUp> powerUps = [];
+  ActivePowerUp? activePowerUp;
+  List<LaserBeam> laserBeams = [];
+  List<FloatingText> floatingTexts = [];
+  bool hasShield = false;
+  int shieldHitsRemaining = 0;
+  
+  // New enemy system
+  List<Enemy> enemies = [];
+  List<EnemyBullet> enemyBullets = [];
+  BossUFO? activeBoss;
+  int asteroidsDestroyed = 0;
   
   @override
   void initState() {
@@ -135,6 +151,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     asteroids.clear();
     bullets.clear();
     
+    // Clear power-up objects (Survival mode)
+    if (widget.gameMode == GameMode.survival) {
+      powerUps.clear();
+      laserBeams.clear();
+      floatingTexts.clear();
+      activePowerUp = null;
+      hasShield = false;
+      shieldHitsRemaining = 0;
+    }
+    
     // Reset frame counter
     frameCount = 0;
     asteroidSpawnRate = 60;
@@ -151,7 +177,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     frameCount++;
     
     // Auto-shoot bullets at regular intervals
-    if (frameCount - lastShotFrame >= shotInterval) {
+    final currentInterval = widget.gameMode == GameMode.survival ? _getCurrentShotInterval() : shotInterval;
+    if (frameCount - lastShotFrame >= currentInterval) {
       _fireBullet();
       lastShotFrame = frameCount;
     }
@@ -176,7 +203,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     
     // Update bullets
     for (var bullet in bullets) {
-      bullet.update();
+      bullet.update(screenWidth);
+    }
+    
+    // Update power-ups (Survival mode only)
+    if (widget.gameMode == GameMode.survival) {
+      _updatePowerUps();
     }
     
     // Check for collisions
@@ -203,8 +235,46 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           bullet.isVisible = false;
           asteroid.isVisible = false;
           
+          // Try to drop power-up in survival mode (5% chance)
+          if (widget.gameMode == GameMode.survival) {
+            _tryDropPowerUp(asteroid.x + asteroid.width / 2, asteroid.y + asteroid.height / 2);
+          }
+          
           // Increase score
           gameState.score++;
+        }
+      }
+    }
+    
+    // Check laser-asteroid collisions (Survival mode only)
+    if (widget.gameMode == GameMode.survival) {
+      for (var laser in laserBeams) {
+        if (!laser.isVisible) continue;
+        
+        for (var asteroid in asteroids) {
+          if (!asteroid.isVisible) continue;
+          
+          if (laser.collidesWith(asteroid)) {
+            // Mark asteroid as invisible
+            asteroid.isVisible = false;
+            
+            // Try to drop power-up
+            _tryDropPowerUp(asteroid.x + asteroid.width / 2, asteroid.y + asteroid.height / 2);
+            
+            // Increase score
+            gameState.score++;
+          }
+        }
+      }
+    }
+    
+    // Check player-power-up collisions (Survival mode only)
+    if (widget.gameMode == GameMode.survival) {
+      for (var powerUp in powerUps) {
+        if (!powerUp.isVisible) continue;
+        
+        if (player.collidesWith(powerUp)) {
+          _collectPowerUp(powerUp);
         }
       }
     }
@@ -217,15 +287,33 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         // Mark asteroid as invisible
         asteroid.isVisible = false;
         
-        // Player takes damage
-        player.hit();
-        
-        // Shake screen effect
-        _shakeController.forward(from: 0);
-        
-        // Check if game over
-        if (player.lives <= 0) {
-          _gameOver();
+        // Handle shield protection (Survival mode)
+        if (widget.gameMode == GameMode.survival && hasShield && shieldHitsRemaining > 0) {
+          shieldHitsRemaining--;
+          if (shieldHitsRemaining <= 0) {
+            hasShield = false;
+            _deactivatePowerUp();
+          }
+          
+          // Show floating text
+          final text = FloatingText(
+            text: 'Shield Hit!',
+            x: player.x,
+            y: player.y - 30,
+            color: Colors.blue,
+          );
+          floatingTexts.add(text);
+        } else {
+          // Player takes damage
+          player.hit();
+          
+          // Shake screen effect
+          _shakeController.forward(from: 0);
+          
+          // Check if game over
+          if (player.lives <= 0) {
+            _gameOver();
+          }
         }
       }
     }
@@ -248,6 +336,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _fireBullet() {
     if (gameState.isPaused || gameState.isGameOver) return;
     
+    // Handle different shot types based on active power-ups
+    if (widget.gameMode == GameMode.survival && 
+        activePowerUp?.type == PowerUpType.tripleShot && 
+        activePowerUp!.isActive) {
+      _fireTripleShot();
+    } else {
+      _fireSingleBullet();
+    }
+  }
+  
+  // Fire a single bullet
+  void _fireSingleBullet() {
     final bullet = Bullet(
       x: player.x + player.width / 2 - bulletWidth / 2,
       y: player.y - bulletHeight,
@@ -255,8 +355,41 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       height: bulletHeight,
       speedY: bulletSpeed,
     );
-    
     bullets.add(bullet);
+  }
+  
+  // Fire three bullets (triple shot power-up)
+  void _fireTripleShot() {
+    // Center bullet
+    _fireSingleBullet();
+    
+    // Left bullet (15 degrees left)
+    final leftAngle = -15 * (pi / 180);
+    final leftSpeedX = sin(leftAngle) * bulletSpeed;
+    final leftSpeedY = cos(leftAngle) * bulletSpeed;
+    final leftBullet = Bullet(
+      x: player.x + player.width / 2 - bulletWidth / 2,
+      y: player.y - bulletHeight,
+      width: bulletWidth,
+      height: bulletHeight,
+      speedY: leftSpeedY,
+      speedX: leftSpeedX,
+    );
+    bullets.add(leftBullet);
+    
+    // Right bullet (15 degrees right)
+    final rightAngle = 15 * (pi / 180);
+    final rightSpeedX = sin(rightAngle) * bulletSpeed;
+    final rightSpeedY = cos(rightAngle) * bulletSpeed;
+    final rightBullet = Bullet(
+      x: player.x + player.width / 2 - bulletWidth / 2,
+      y: player.y - bulletHeight,
+      width: bulletWidth,
+      height: bulletHeight,
+      speedY: rightSpeedY,
+      speedX: rightSpeedX,
+    );
+    bullets.add(rightBullet);
   }
   
   // Handle touch input for player movement
@@ -310,6 +443,136 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
   
+  // Power-up system methods (Survival mode only)
+  
+  // Update power-ups each frame
+  void _updatePowerUps() {
+    // Update active power-up
+    if (activePowerUp != null) {
+      activePowerUp!.update();
+      if (!activePowerUp!.isActive) {
+        _deactivatePowerUp();
+      }
+    }
+    
+    // Update floating power-ups
+    for (var powerUp in powerUps) {
+      powerUp.update(screenHeight);
+    }
+    
+    // Update laser beams to follow player
+    if (activePowerUp?.type == PowerUpType.laserBeam && activePowerUp!.isActive) {
+      // Update laser beam position to follow player
+      for (var laser in laserBeams) {
+        laser.x = player.x + player.width / 2 - 4;
+        laser.update();
+      }
+    }
+    
+    // Update floating texts
+    for (var text in floatingTexts) {
+      text.update();
+    }
+    
+    // Clean up expired objects
+    powerUps.removeWhere((powerUp) => !powerUp.isVisible);
+    laserBeams.removeWhere((laser) => !laser.isVisible);
+    floatingTexts.removeWhere((text) => !text.isVisible);
+  }
+  
+  // Check if power-up should be dropped (5% chance)
+  void _tryDropPowerUp(double x, double y) {
+    final random = Random();
+    if (random.nextDouble() < 0.05) { // 5% chance
+      final powerUp = PowerUp.random(x, y);
+      powerUps.add(powerUp);
+    }
+  }
+  
+  // Collect a power-up
+  void _collectPowerUp(PowerUp powerUp) {
+    powerUp.isVisible = false;
+    
+    // Deactivate current power-up if any
+    if (activePowerUp != null) {
+      _deactivatePowerUp();
+    }
+    
+    // Activate new power-up
+    _activatePowerUp(powerUp.type);
+    
+    // Show floating text
+    final text = FloatingText(
+      text: ActivePowerUp(type: powerUp.type, remainingTime: 0).displayName,
+      x: powerUp.x,
+      y: powerUp.y,
+    );
+    floatingTexts.add(text);
+  }
+  
+  // Activate a power-up
+  void _activatePowerUp(PowerUpType type) {
+    activePowerUp = ActivePowerUp(
+      type: type,
+      remainingTime: ActivePowerUp.getDuration(type),
+    );
+    
+    switch (type) {
+      case PowerUpType.shield:
+        hasShield = true;
+        shieldHitsRemaining = 1;
+        break;
+      case PowerUpType.rapidFire:
+        // Rapid fire will be handled in _fireBullet
+        break;
+      case PowerUpType.tripleShot:
+        // Triple shot will be handled in _fireBullet
+        break;
+      case PowerUpType.laserBeam:
+        _createLaserBeam();
+        break;
+    }
+  }
+  
+  // Deactivate current power-up
+  void _deactivatePowerUp() {
+    if (activePowerUp == null) return;
+    
+    switch (activePowerUp!.type) {
+      case PowerUpType.shield:
+        hasShield = false;
+        shieldHitsRemaining = 0;
+        break;
+      case PowerUpType.laserBeam:
+        laserBeams.clear();
+        break;
+      case PowerUpType.rapidFire:
+      case PowerUpType.tripleShot:
+        // These don't need special cleanup
+        break;
+    }
+    
+    activePowerUp = null;
+  }
+  
+  // Create laser beam
+  void _createLaserBeam() {
+    final laser = LaserBeam(
+      x: player.x + player.width / 2 - 4,
+      y: 0,
+      height: player.y,
+    );
+    laserBeams.add(laser);
+  }
+  
+  // Get current shot interval based on active power-ups
+  int _getCurrentShotInterval() {
+    if (activePowerUp?.type == PowerUpType.rapidFire && activePowerUp!.isActive) {
+      return shotInterval ~/ 2; // Double fire rate
+    }
+    return shotInterval;
+  }
+  
   @override
   Widget build(BuildContext context) {
     // Update screen dimensions
@@ -351,6 +614,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       
                       // Draw bullets
                       ...bullets.map(_buildBullet).toList(),
+                      
+                      // Draw power-ups (Survival mode only)
+                      if (widget.gameMode == GameMode.survival) ...
+                        powerUps.map(_buildPowerUp).toList(),
+                      
+                      // Draw laser beams (Survival mode only)
+                      if (widget.gameMode == GameMode.survival) ...
+                        laserBeams.map(_buildLaserBeam).toList(),
+                      
+                      // Draw floating texts (Survival mode only)
+                      if (widget.gameMode == GameMode.survival) ...
+                        floatingTexts.map(_buildFloatingText).toList(),
                     ],
                   ),
                 ),
@@ -396,10 +671,36 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       top: player.y,
       width: player.width,
       height: player.height,
-      child: SvgPicture.asset(
-        'assets/images/spaceship.svg',
-        width: player.width,
-        height: player.height,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Shield effect
+          if (widget.gameMode == GameMode.survival && hasShield && shieldHitsRemaining > 0)
+            Container(
+              width: player.width + 20,
+              height: player.height + 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.blue.withOpacity(0.8),
+                  width: 3,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.5),
+                    spreadRadius: 2,
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+            ),
+          // Player spaceship
+          SvgPicture.asset(
+            'assets/images/spaceship.svg',
+            width: player.width,
+            height: player.height,
+          ),
+        ],
       ),
     );
   }
@@ -482,6 +783,27 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+          
+          // Power-up status (Survival mode only)
+          if (widget.gameMode == GameMode.survival && activePowerUp != null && activePowerUp!.isActive) ...
+            [
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${activePowerUp!.type.name.toUpperCase()}: ${(activePowerUp!.remainingTime / 60).ceil()}s',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
         ],
       ),
     );
@@ -568,6 +890,138 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+  
+  // Build power-up widget
+  Widget _buildPowerUp(PowerUp powerUp) {
+    if (!powerUp.isVisible) return const SizedBox.shrink();
+    
+    // Create pulsing animation for power-ups
+    final pulseValue = 1.0 + sin(frameCount * 0.1) * 0.2;
+    
+    return Positioned(
+      left: powerUp.x,
+      top: powerUp.y,
+      width: powerUp.width,
+      height: powerUp.height,
+      child: Transform.scale(
+        scale: pulseValue,
+        child: Container(
+          decoration: BoxDecoration(
+            color: powerUp.color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: powerUp.color.withOpacity(0.6),
+                spreadRadius: 2,
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: Icon(
+            powerUp.icon,
+            color: Colors.white,
+            size: powerUp.width * 0.6,
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // Build laser beam widget
+  Widget _buildLaserBeam(LaserBeam laser) {
+    if (!laser.isVisible) return const SizedBox.shrink();
+    
+    return Positioned(
+      left: laser.x,
+      top: laser.y,
+      width: laser.width,
+      height: laser.height,
+      child: Stack(
+        children: [
+          // Outer glow
+          Container(
+            width: laser.width + 4,
+            height: laser.height,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.purple.withOpacity(0.3),
+                  Colors.pink.withOpacity(0.2),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+          // Main beam
+          Positioned(
+            left: 2,
+            child: Container(
+              width: laser.width,
+              height: laser.height,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.purple.withOpacity(0.9),
+                    Colors.pink.withOpacity(0.8),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+          // Inner core
+          Positioned(
+            left: 3,
+            child: Container(
+              width: laser.width - 2,
+              height: laser.height,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.8),
+                    Colors.pink.withOpacity(0.9),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Build floating text widget
+  Widget _buildFloatingText(FloatingText text) {
+    if (!text.isVisible) return const SizedBox.shrink();
+    
+    return Positioned(
+      left: text.x,
+      top: text.y,
+      child: Opacity(
+        opacity: text.opacity,
+        child: Text(
+          text.text,
+          style: TextStyle(
+            color: text.color,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            shadows: [
+              Shadow(
+                blurRadius: 2,
+                color: Colors.black,
+                offset: Offset(1, 1),
+              ),
+            ],
+          ),
         ),
       ),
     );
