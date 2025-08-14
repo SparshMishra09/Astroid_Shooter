@@ -9,7 +9,7 @@ import '../services/score_service.dart';
 class GameScreen extends StatefulWidget {
   final GameMode gameMode;
   
-  const GameScreen({Key? key, this.gameMode = GameMode.classic}) : super(key: key);
+  const GameScreen({Key? key, this.gameMode = GameMode.survival}) : super(key: key);
 
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -49,20 +49,29 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   
   // Animation controllers for visual effects
   late AnimationController _shakeController;
+  late AnimationController _comboFlashController;
   
-  // Power-up system (only for Survival mode)
+  // Power-up system (only for Survival mode) - now stackable
   List<PowerUp> powerUps = [];
-  ActivePowerUp? activePowerUp;
+  Map<PowerUpType, ActivePowerUp> activePowerUps = {};
   List<LaserBeam> laserBeams = [];
   List<FloatingText> floatingTexts = [];
   bool hasShield = false;
   int shieldHitsRemaining = 0;
+  
+  // Combo system
+  double? _previousComboMultiplier;
+  int _comboFlashTimer = 0;
   
   // New enemy system
   List<Enemy> enemies = [];
   List<EnemyBullet> enemyBullets = [];
   BossUFO? activeBoss;
   int asteroidsDestroyed = 0;
+  
+  // Particle and effect systems
+  List<ExplosionEffect> explosionEffects = [];
+  List<HitEffect> hitEffects = [];
   
   @override
   void initState() {
@@ -78,6 +87,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
+    );
+    
+    // Initialize combo flash animation controller
+    _comboFlashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
     );
     
     // Initialize game state
@@ -107,6 +122,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void dispose() {
     gameTimer.cancel();
     _shakeController.dispose();
+    _comboFlashController.dispose();
     
     // Reset orientation settings
     SystemChrome.setPreferredOrientations([
@@ -151,15 +167,23 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     asteroids.clear();
     bullets.clear();
     
-    // Clear power-up objects (Survival mode)
-    if (widget.gameMode == GameMode.survival) {
-      powerUps.clear();
-      laserBeams.clear();
-      floatingTexts.clear();
-      activePowerUp = null;
-      hasShield = false;
-      shieldHitsRemaining = 0;
-    }
+    // Clear power-up objects and enemies
+    powerUps.clear();
+    laserBeams.clear();
+    floatingTexts.clear();
+    activePowerUps.clear();
+    hasShield = false;
+    shieldHitsRemaining = 0;
+    
+    // Clear new enemy system
+    enemies.clear();
+    enemyBullets.clear();
+    activeBoss = null;
+    asteroidsDestroyed = 0;
+    
+    // Clear particle effects
+    explosionEffects.clear();
+    hitEffects.clear();
     
     // Reset frame counter
     frameCount = 0;
@@ -206,10 +230,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       bullet.update(screenWidth);
     }
     
-    // Update power-ups (Survival mode only)
-    if (widget.gameMode == GameMode.survival) {
-      _updatePowerUps();
-    }
+    // Update power-ups and enemies
+    _updatePowerUps();
+    _updateEnemies();
+    _spawnEnemies();
     
     // Check for collisions
     _checkCollisions();
@@ -217,8 +241,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     // Clean up invisible objects
     _cleanupObjects();
     
-    // Update UI
+  // Update UI
     setState(() {});
+    
+    // Update combo flash timer
+    if (_comboFlashTimer > 0) {
+      _comboFlashTimer--;
+    }
   }
   
   // Check for collisions between game objects
@@ -235,47 +264,138 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           bullet.isVisible = false;
           asteroid.isVisible = false;
           
-          // Try to drop power-up in survival mode (5% chance)
-          if (widget.gameMode == GameMode.survival) {
-            _tryDropPowerUp(asteroid.x + asteroid.width / 2, asteroid.y + asteroid.height / 2);
-          }
+          // Create explosion effect
+          explosionEffects.add(ExplosionEffect(
+            x: asteroid.x + asteroid.width / 2,
+            y: asteroid.y + asteroid.height / 2,
+            particleCount: 6,
+          ));
           
-          // Increase score
-          gameState.score++;
+          // Register hit for combo system
+          player.registerHit();
+          
+          // Calculate score with combo multiplier
+          final baseScore = 10; // Normal asteroid: 10 points
+          final comboScore = player.calculateScore(baseScore);
+          gameState.score += comboScore;
+          asteroidsDestroyed++;
+          
+          // Show score popup
+          _showScorePopup(asteroid.x + asteroid.width / 2, asteroid.y, comboScore, player.comboMultiplier);
+          
+          // Try to drop power-up (5% chance)
+          _tryDropPowerUp(asteroid.x + asteroid.width / 2, asteroid.y + asteroid.height / 2);
+          
+          // Check for combo flash animation
+          _checkComboFlash();
         }
       }
-    }
-    
-    // Check laser-asteroid collisions (Survival mode only)
-    if (widget.gameMode == GameMode.survival) {
-      for (var laser in laserBeams) {
-        if (!laser.isVisible) continue;
+      
+      // Check bullet-enemy collisions
+      for (var enemy in enemies) {
+        if (!enemy.isVisible) continue;
         
-        for (var asteroid in asteroids) {
-          if (!asteroid.isVisible) continue;
+        if (bullet.collidesWith(enemy)) {
+          bullet.isVisible = false;
           
-          if (laser.collidesWith(asteroid)) {
-            // Mark asteroid as invisible
-            asteroid.isVisible = false;
+          if (enemy.takeDamage(1)) {
+            // Register hit for combo system
+            player.registerHit();
+            
+            // Calculate score with combo multiplier
+            final comboScore = player.calculateScore(enemy.scoreValue);
+            gameState.score += comboScore;
+            asteroidsDestroyed++;
+            
+            // Show score popup
+            _showScorePopup(enemy.x + enemy.width / 2, enemy.y, comboScore, player.comboMultiplier);
+            
+            // Check for combo flash animation
+            _checkComboFlash();
+            
+            // Handle huge asteroid splitting
+            if (enemy is HugeSlowAsteroid) {
+              _splitHugeAsteroid(enemy);
+            }
             
             // Try to drop power-up
-            _tryDropPowerUp(asteroid.x + asteroid.width / 2, asteroid.y + asteroid.height / 2);
-            
-            // Increase score
-            gameState.score++;
+            _tryDropPowerUp(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+          }
+        }
+      }
+      
+      // Check bullet-boss collisions
+      if (activeBoss != null && activeBoss!.isVisible) {
+        if (bullet.collidesWith(activeBoss!)) {
+          bullet.isVisible = false;
+          activeBoss!.takeDamage(1);
+          
+          if (!activeBoss!.isVisible) {
+            _defeatBoss();
           }
         }
       }
     }
     
-    // Check player-power-up collisions (Survival mode only)
-    if (widget.gameMode == GameMode.survival) {
-      for (var powerUp in powerUps) {
-        if (!powerUp.isVisible) continue;
+    // Check laser-asteroid collisions
+    for (var laser in laserBeams) {
+      if (!laser.isVisible) continue;
+      
+      for (var asteroid in asteroids) {
+        if (!asteroid.isVisible) continue;
         
-        if (player.collidesWith(powerUp)) {
-          _collectPowerUp(powerUp);
+        if (laser.collidesWith(asteroid)) {
+          // Mark asteroid as invisible
+          asteroid.isVisible = false;
+          
+          // Try to drop power-up
+          _tryDropPowerUp(asteroid.x + asteroid.width / 2, asteroid.y + asteroid.height / 2);
+          
+          // Increase score and asteroids destroyed counter
+          gameState.score++;
+          asteroidsDestroyed++;
         }
+      }
+      
+      // Check laser-enemy collisions
+      for (var enemy in enemies) {
+        if (!enemy.isVisible) continue;
+        
+        if (laser.collidesWith(enemy)) {
+          if (enemy.takeDamage(1)) {
+            // Enemy destroyed
+            gameState.score += enemy.scoreValue;
+            asteroidsDestroyed++;
+            
+            // Handle huge asteroid splitting
+            if (enemy is HugeSlowAsteroid) {
+              _splitHugeAsteroid(enemy);
+            }
+            
+            // Try to drop power-up
+            _tryDropPowerUp(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+          }
+        }
+      }
+      
+      // Check laser-boss collisions
+      if (activeBoss != null && activeBoss!.isVisible) {
+        if (laser.collidesWith(activeBoss!)) {
+          activeBoss!.takeDamage(1);
+          
+          if (!activeBoss!.isVisible) {
+            _defeatBoss();
+          }
+        }
+      }
+    }
+    
+    // Check player-power-up collisions
+    for (var powerUp in powerUps) {
+      if (!powerUp.isVisible) continue;
+      
+      if (player.collidesWith(powerUp)) {
+        _collectPowerUp(powerUp);
       }
     }
     
@@ -284,45 +404,63 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (!asteroid.isVisible) continue;
       
       if (player.collidesWith(asteroid)) {
-        // Mark asteroid as invisible
         asteroid.isVisible = false;
-        
-        // Handle shield protection (Survival mode)
-        if (widget.gameMode == GameMode.survival && hasShield && shieldHitsRemaining > 0) {
-          shieldHitsRemaining--;
-          if (shieldHitsRemaining <= 0) {
-            hasShield = false;
-            _deactivatePowerUp();
-          }
-          
-          // Show floating text
-          final text = FloatingText(
-            text: 'Shield Hit!',
-            x: player.x,
-            y: player.y - 30,
-            color: Colors.blue,
-          );
-          floatingTexts.add(text);
-        } else {
-          // Player takes damage
-          player.hit();
-          
-          // Shake screen effect
-          _shakeController.forward(from: 0);
-          
-          // Check if game over
-          if (player.lives <= 0) {
-            _gameOver();
-          }
-        }
+        _handlePlayerHit();
+      }
+    }
+    
+    // Check player-enemy collisions
+    for (var enemy in enemies) {
+      if (!enemy.isVisible) continue;
+      
+      if (player.collidesWith(enemy)) {
+        enemy.isVisible = false;
+        _handlePlayerHit();
+      }
+    }
+    
+    // Check player-boss collisions
+    if (activeBoss != null && activeBoss!.isVisible) {
+      if (player.collidesWith(activeBoss!)) {
+        _handlePlayerHit();
+      }
+    }
+    
+    // Check player-enemy bullet collisions
+    for (var bullet in enemyBullets) {
+      if (!bullet.isVisible) continue;
+      
+      if (player.collidesWith(bullet)) {
+        bullet.isVisible = false;
+        _handlePlayerHit();
       }
     }
   }
   
   // Clean up invisible objects
   void _cleanupObjects() {
+    // Track bullets that go off screen without hitting anything (misses)
+    final bulletsToRemove = <Bullet>[];
+    for (var bullet in bullets) {
+      if (!bullet.isVisible) {
+        if (bullet.y < -bullet.height) {
+          // Bullet went off top of screen - this is a miss
+          player.registerMiss();
+        }
+        bulletsToRemove.add(bullet);
+      }
+    }
+    
+    // Remove invisible objects safely
     asteroids.removeWhere((asteroid) => !asteroid.isVisible);
     bullets.removeWhere((bullet) => !bullet.isVisible);
+    
+    // Clean up power-up and enemy objects
+    powerUps.removeWhere((powerUp) => !powerUp.isVisible);
+    enemies.removeWhere((enemy) => !enemy.isVisible);
+    enemyBullets.removeWhere((bullet) => !bullet.isVisible);
+    laserBeams.removeWhere((laser) => !laser.isVisible);
+    floatingTexts.removeWhere((text) => !text.isVisible);
   }
   
   // Handle game over
@@ -338,8 +476,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     
     // Handle different shot types based on active power-ups
     if (widget.gameMode == GameMode.survival && 
-        activePowerUp?.type == PowerUpType.tripleShot && 
-        activePowerUp!.isActive) {
+        activePowerUps.containsKey(PowerUpType.tripleShot) && 
+        activePowerUps[PowerUpType.tripleShot]!.isActive) {
       _fireTripleShot();
     } else {
       _fireSingleBullet();
@@ -447,12 +585,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   
   // Update power-ups each frame
   void _updatePowerUps() {
-    // Update active power-up
-    if (activePowerUp != null) {
-      activePowerUp!.update();
-      if (!activePowerUp!.isActive) {
-        _deactivatePowerUp();
+    // Update active power-ups
+    final keysToRemove = <PowerUpType>[];
+    activePowerUps.forEach((type, powerUp) {
+      powerUp.update();
+      if (!powerUp.isActive) {
+        keysToRemove.add(type);
       }
+    });
+    
+    // Remove inactive power-ups
+    for (var key in keysToRemove) {
+      _deactivatePowerUp(key);
     }
     
     // Update floating power-ups
@@ -461,7 +605,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
     
     // Update laser beams to follow player
-    if (activePowerUp?.type == PowerUpType.laserBeam && activePowerUp!.isActive) {
+    if (activePowerUps.containsKey(PowerUpType.laserBeam) && 
+        activePowerUps[PowerUpType.laserBeam]!.isActive) {
       // Update laser beam position to follow player
       for (var laser in laserBeams) {
         laser.x = player.x + player.width / 2 - 4;
@@ -474,10 +619,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       text.update();
     }
     
-    // Clean up expired objects
-    powerUps.removeWhere((powerUp) => !powerUp.isVisible);
-    laserBeams.removeWhere((laser) => !laser.isVisible);
-    floatingTexts.removeWhere((text) => !text.isVisible);
+    // Note: Object cleanup is handled in _cleanupObjects() to avoid duplication
   }
   
   // Check if power-up should be dropped (5% chance)
@@ -493,12 +635,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _collectPowerUp(PowerUp powerUp) {
     powerUp.isVisible = false;
     
-    // Deactivate current power-up if any
-    if (activePowerUp != null) {
-      _deactivatePowerUp();
-    }
-    
-    // Activate new power-up
+    // Activate power-up (stackable system allows multiple active power-ups)
     _activatePowerUp(powerUp.type);
     
     // Show floating text
@@ -512,7 +649,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   
   // Activate a power-up
   void _activatePowerUp(PowerUpType type) {
-    activePowerUp = ActivePowerUp(
+    activePowerUps[type] = ActivePowerUp(
       type: type,
       remainingTime: ActivePowerUp.getDuration(type),
     );
@@ -534,11 +671,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
   }
   
-  // Deactivate current power-up
-  void _deactivatePowerUp() {
-    if (activePowerUp == null) return;
+  // Deactivate specific power-up
+  void _deactivatePowerUp(PowerUpType type) {
+    if (!activePowerUps.containsKey(type)) return;
     
-    switch (activePowerUp!.type) {
+    switch (type) {
       case PowerUpType.shield:
         hasShield = false;
         shieldHitsRemaining = 0;
@@ -552,7 +689,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         break;
     }
     
-    activePowerUp = null;
+    activePowerUps.remove(type);
   }
   
   // Create laser beam
@@ -567,10 +704,231 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   
   // Get current shot interval based on active power-ups
   int _getCurrentShotInterval() {
-    if (activePowerUp?.type == PowerUpType.rapidFire && activePowerUp!.isActive) {
+    if (activePowerUps.containsKey(PowerUpType.rapidFire) && 
+        activePowerUps[PowerUpType.rapidFire]!.isActive) {
       return shotInterval ~/ 2; // Double fire rate
     }
     return shotInterval;
+  }
+  
+  // Enemy system methods
+  void _updateEnemies() {
+    // Update all enemies
+    for (var enemy in enemies) {
+      enemy.update(screenHeight, screenWidth);
+      
+      // Handle UFO shooting
+      if (enemy is EnemyUFO && enemy.shouldShoot()) {
+        _fireEnemyBullet(enemy);
+      }
+    }
+    
+    // Update enemy bullets
+    for (var bullet in enemyBullets) {
+      bullet.update(screenHeight);
+    }
+    
+    // Update boss
+    if (activeBoss != null) {
+      activeBoss!.update(screenHeight, screenWidth);
+      
+      // Boss shooting
+      if (activeBoss!.shouldShoot()) {
+        _fireBossSpread();
+      }
+    }
+    
+    // Note: Enemy cleanup is handled in _cleanupObjects() to avoid duplication
+  }
+  
+  // Fire enemy bullet from UFO
+  void _fireEnemyBullet(EnemyUFO ufo) {
+    final bullet = EnemyBullet(
+      x: ufo.x + ufo.width / 2 - 5,
+      y: ufo.y + ufo.height,
+      width: 10,
+      height: 15,
+      speedY: 3,
+    );
+    enemyBullets.add(bullet);
+  }
+  
+  // Fire boss spread bullets
+  void _fireBossSpread() {
+    if (activeBoss == null) return;
+    
+    // Fire 3 bullets in spread pattern
+    for (int i = -1; i <= 1; i++) {
+      final angle = i * 20 * (pi / 180); // -20, 0, +20 degrees
+      final speedX = sin(angle) * 4;
+      final speedY = cos(angle) * 4;
+      
+      final bullet = EnemyBullet(
+        x: activeBoss!.x + activeBoss!.width / 2 - 5,
+        y: activeBoss!.y + activeBoss!.height,
+        width: 10,
+        height: 15,
+        speedY: speedY,
+        speedX: speedX,
+      );
+      enemyBullets.add(bullet);
+    }
+  }
+  
+  void _spawnEnemies() {
+    // Check for boss spawn every 150 asteroids destroyed
+    if (asteroidsDestroyed >= 150 && activeBoss == null) {
+      _spawnBoss();
+      return;
+    }
+    
+    // Skip enemy spawning if boss is active
+    if (activeBoss != null) return;
+    
+    // Spawn enemies with probability every 180 frames (3 seconds)
+    if (frameCount % 180 == 0) {
+      final random = Random();
+      final roll = random.nextDouble();
+      
+      if (roll < 0.25) { // 25% chance for small fast asteroid
+        enemies.add(SmallFastAsteroid.random(screenWidth, asteroidSize));
+      } else if (roll < 0.35) { // 10% chance for huge slow asteroid
+        enemies.add(HugeSlowAsteroid.random(screenWidth, asteroidSize));
+      } else if (roll < 0.40) { // 5% chance for UFO
+        enemies.add(EnemyUFO.random(screenWidth, 60));
+      }
+    }
+  }
+  
+  // Handle player getting hit
+  void _handlePlayerHit() {
+    // Handle shield protection
+    if (hasShield && shieldHitsRemaining > 0) {
+      shieldHitsRemaining--;
+      if (shieldHitsRemaining <= 0) {
+        hasShield = false;
+        _deactivatePowerUp(PowerUpType.shield);
+      }
+      
+      // Show floating text
+      final text = FloatingText(
+        text: 'Shield Hit!',
+        x: player.x,
+        y: player.y - 30,
+        color: Colors.blue,
+      );
+      floatingTexts.add(text);
+    } else {
+      // Player takes damage
+      player.hit();
+      
+      // Reset combo on damage
+      player.resetComboOnDamage();
+      
+      // Shake screen effect
+      _shakeController.forward(from: 0);
+      
+      // Check if game over
+      if (player.lives <= 0) {
+        _gameOver();
+      }
+    }
+  }
+  
+  // Spawn boss UFO
+  void _spawnBoss() {
+    activeBoss = BossUFO.create(screenWidth, 120);
+    
+    // Show boss warning
+    final text = FloatingText(
+      text: 'BOSS INCOMING!',
+      x: screenWidth / 2 - 60,
+      y: screenHeight / 2,
+      color: Colors.red,
+      lifeTimer: 180,
+    );
+    floatingTexts.add(text);
+    
+    // Reset asteroid counter
+    asteroidsDestroyed = 0;
+  }
+  
+  // Defeat boss
+  void _defeatBoss() {
+    if (activeBoss == null) return;
+    
+    // Add score for boss
+    gameState.score += activeBoss!.scoreValue;
+    
+    // Drop 2 power-ups
+    for (int i = 0; i < 2; i++) {
+      final powerUp = PowerUp.random(
+        activeBoss!.x + activeBoss!.width / 2 + (i * 30 - 15),
+        activeBoss!.y + activeBoss!.height / 2,
+      );
+      powerUps.add(powerUp);
+    }
+    
+    // Show victory text
+    final text = FloatingText(
+      text: 'BOSS DEFEATED!',
+      x: screenWidth / 2 - 70,
+      y: screenHeight / 2,
+      color: Colors.yellow,
+      lifeTimer: 180,
+    );
+    floatingTexts.add(text);
+    
+    activeBoss = null;
+  }
+  
+  // Split huge asteroid into 2 small ones
+  void _splitHugeAsteroid(HugeSlowAsteroid hugeAsteroid) {
+    // Create a list to store new enemies to add after collision processing
+    List<SmallFastAsteroid> newEnemies = [];
+    
+    for (int i = 0; i < 2; i++) {
+      final smallAsteroid = SmallFastAsteroid(
+        x: hugeAsteroid.x + (i * 20),
+        y: hugeAsteroid.y,
+        size: asteroidSize * 0.5,
+        speedY: (1 + Random().nextDouble() * 3) * 1.8,
+        rotationSpeed: (Random().nextDouble() - 0.5) * 0.15,
+      );
+      newEnemies.add(smallAsteroid);
+    }
+    
+    // Add new enemies in next frame to avoid concurrent modification
+    Future.microtask(() {
+      if (mounted && !gameState.isGameOver) {
+        enemies.addAll(newEnemies);
+      }
+    });
+  }
+  
+  // Show score popup with combo information
+  void _showScorePopup(double x, double y, int score, double multiplier) {
+    final text = FloatingText(
+      text: multiplier > 1.0 ? '+$score (${multiplier.toStringAsFixed(1)}x)' : '+$score',
+      x: x - 20,
+      y: y - 20,
+      color: multiplier > 1.0 ? Colors.yellow : Colors.white,
+      lifeTimer: 90,
+    );
+    floatingTexts.add(text);
+  }
+  
+  // Check if combo flash animation should play
+  void _checkComboFlash() {
+    if (_previousComboMultiplier == null || player.comboMultiplier > _previousComboMultiplier!) {
+      _comboFlashController.forward(from: 0);
+      _comboFlashTimer = 60; // Flash for 60 frames (1 second)
+    }
+    _previousComboMultiplier = player.comboMultiplier;
+    
+    if (_comboFlashTimer > 0) {
+      _comboFlashTimer--;
+    }
   }
   
   @override
@@ -626,6 +984,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       // Draw floating texts (Survival mode only)
                       if (widget.gameMode == GameMode.survival) ...
                         floatingTexts.map(_buildFloatingText).toList(),
+                      
+                      // Draw enemies
+                      ...enemies.map(_buildEnemy).toList(),
+                      
+                      // Draw enemy bullets
+                      ...enemyBullets.map(_buildEnemyBullet).toList(),
+                      
+                      // Draw boss
+                      if (activeBoss != null) _buildBoss(activeBoss!),
                     ],
                   ),
                 ),
@@ -633,6 +1000,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               
               // Game UI overlay
               _buildGameUI(),
+              
+              // Combo display
+              if (player.hasCombo) _buildComboDisplay(),
               
               // Pause button
               Positioned(
@@ -746,66 +1116,155 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildGameUI() {
     return Positioned(
       top: 10,
-      left: 10,
+      left: 0,
+      right: 0,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Score
+          // Centered Score
           Text(
             'Score: ${gameState.score}',
-            style: const TextStyle(color: Colors.white, fontSize: 18),
+            style: const TextStyle(
+              color: Colors.white, 
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  blurRadius: 2,
+                  color: Colors.black,
+                  offset: Offset(1, 1),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 5),
-          // High Score
-          Text(
-            'High Score: ${gameState.highScore}',
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+          const SizedBox(height: 20),
+          // Lives and High Score (left side)
+          Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // High Score
+                Text(
+                  'High Score: ${gameState.highScore}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 10),
+                // Lives
+                Row(
+                  children: List.generate(
+                    3,
+                    (index) => Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: index < player.lives
+                          ? SvgPicture.asset(
+                              'assets/images/heart.svg',
+                              width: 20,
+                              height: 20,
+                            )
+                          : SvgPicture.asset(
+                              'assets/images/heart.svg',
+                              width: 20,
+                              height: 20,
+                              color: Colors.grey.withOpacity(0.5),
+                            ),
+                    ),
+                  ),
+                ),
+                
+                // Power-up status (Survival mode only)
+                if (widget.gameMode == GameMode.survival && activePowerUps.isNotEmpty) ...
+                  activePowerUps.entries.map((entry) {
+                    final powerUp = entry.value;
+                    if (powerUp.isActive) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${powerUp.type.name.toUpperCase()}: ${(powerUp.remainingTime / 60).ceil()}s',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      );
+                    } else {
+                      return const SizedBox.shrink();
+                    }
+                  }).toList(),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          // Lives
-          Row(
-            children: List.generate(
-              3,
-              (index) => Padding(
-                padding: const EdgeInsets.only(right: 5),
-                child: index < player.lives
-                    ? SvgPicture.asset(
-                        'assets/images/heart.svg',
-                        width: 20,
-                        height: 20,
-                      )
-                    : SvgPicture.asset(
-                        'assets/images/heart.svg',
-                        width: 20,
-                        height: 20,
-                        color: Colors.grey.withOpacity(0.5),
-                      ),
+        ],
+      ),
+    );
+  }
+  
+  // Build combo display widget
+  Widget _buildComboDisplay() {
+    return AnimatedBuilder(
+      animation: _comboFlashController,
+      builder: (context, child) {
+        final flashValue = _comboFlashController.value;
+        final isFlashing = _comboFlashTimer > 0;
+        
+        return Positioned(
+          top: 80,
+          right: 20,
+          child: Transform.scale(
+            scale: isFlashing ? (1.0 + flashValue * 0.3) : 1.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    isFlashing 
+                        ? Colors.yellow.withOpacity(0.9) 
+                        : Colors.orange.withOpacity(0.8),
+                    isFlashing 
+                        ? Colors.orange.withOpacity(0.9) 
+                        : Colors.red.withOpacity(0.8),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isFlashing ? Colors.yellow : Colors.white,
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: (isFlashing ? Colors.yellow : Colors.orange).withOpacity(0.6),
+                    spreadRadius: isFlashing ? 4 : 2,
+                    blurRadius: isFlashing ? 8 : 4,
+                  ),
+                ],
+              ),
+              child: Text(
+                player.comboText,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isFlashing ? 16 : 14,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      blurRadius: 2,
+                      color: Colors.black,
+                      offset: Offset(1, 1),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          
-          // Power-up status (Survival mode only)
-          if (widget.gameMode == GameMode.survival && activePowerUp != null && activePowerUp!.isActive) ...
-            [
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${activePowerUp!.type.name.toUpperCase()}: ${(activePowerUp!.remainingTime / 60).ceil()}s',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-        ],
-      ),
+        );
+      },
     );
   }
   
@@ -1022,6 +1481,518 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+  
+  // Build enemy widget
+  Widget _buildEnemy(Enemy enemy) {
+    if (!enemy.isVisible) return const SizedBox.shrink();
+    
+    Widget enemyWidget;
+    
+    switch (enemy.type) {
+      case EnemyType.smallFastAsteroid:
+        enemyWidget = _buildSmallFastAsteroid(enemy as SmallFastAsteroid);
+        break;
+      case EnemyType.hugeSowAsteroid:
+        enemyWidget = _buildHugeSlowAsteroid(enemy as HugeSlowAsteroid);
+        break;
+      case EnemyType.ufo:
+        enemyWidget = _buildAlienUFO(enemy as EnemyUFO);
+        break;
+      default:
+        enemyWidget = Container(
+          width: enemy.width,
+          height: enemy.height,
+          color: Colors.red,
+        );
+    }
+    
+    return Positioned(
+      left: enemy.x,
+      top: enemy.y,
+      width: enemy.width,
+      height: enemy.height,
+      child: enemyWidget,
+    );
+  }
+  
+  // Build small fast asteroid with simple design to prevent visual issues
+  Widget _buildSmallFastAsteroid(SmallFastAsteroid asteroid) {
+    return Transform.rotate(
+      angle: asteroid.rotationAngle,
+      child: Container(
+        width: asteroid.width,
+        height: asteroid.height,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.orange.withOpacity(0.8),
+          border: Border.all(
+            color: Colors.red.withOpacity(0.6),
+            width: 2,
+          ),
+        ),
+        child: Center(
+          child: Container(
+            width: asteroid.width * 0.4,
+            height: asteroid.height * 0.4,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.7),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // Build huge slow asteroid with rocky texture effect
+  Widget _buildHugeSlowAsteroid(HugeSlowAsteroid asteroid) {
+    return Transform.rotate(
+      angle: asteroid.rotationAngle,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Outer glow
+          Container(
+            width: asteroid.width + 12,
+            height: asteroid.height + 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.brown.withOpacity(0.4),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          // Main asteroid body
+          Container(
+            width: asteroid.width,
+            height: asteroid.height,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.brown.shade800,
+                  Colors.brown.shade600,
+                  Colors.brown.shade400,
+                ],
+                stops: [0.0, 0.6, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.brown.withOpacity(0.7),
+                  spreadRadius: 3,
+                  blurRadius: 12,
+                ),
+              ],
+            ),
+          ),
+          // Rocky texture spots
+          ...List.generate(8, (index) {
+            final angle = (index * 45) * (pi / 180);
+            final distance = asteroid.width * 0.25;
+            return Transform.translate(
+              offset: Offset(
+                cos(angle) * distance,
+                sin(angle) * distance,
+              ),
+              child: Container(
+                width: asteroid.width * 0.15,
+                height: asteroid.height * 0.15,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withOpacity(0.6),
+                ),
+              ),
+            );
+          }),
+          // Health indicator (gets redder as health decreases)
+          Container(
+            width: asteroid.width * 0.3,
+            height: asteroid.height * 0.3,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: asteroid.health == asteroid.maxHealth
+                  ? Colors.brown.withOpacity(0.8)
+                  : asteroid.health == 2
+                      ? Colors.orange.withOpacity(0.8)
+                      : Colors.red.withOpacity(0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Build alien UFO with proper alien spaceship design
+  Widget _buildAlienUFO(EnemyUFO ufo) {
+    final pulseValue = 1.0 + sin(frameCount * 0.1) * 0.1;
+    
+    return Transform.scale(
+      scale: pulseValue,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // UFO outer glow
+          Container(
+            width: ufo.width + 15,
+            height: ufo.height + 15,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.green.withOpacity(0.6),
+                  Colors.cyan.withOpacity(0.3),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          // UFO main body (saucer shape)
+          Container(
+            width: ufo.width,
+            height: ufo.height * 0.6,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.horizontal(
+                left: Radius.circular(ufo.width / 2),
+                right: Radius.circular(ufo.width / 2),
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.grey.shade300,
+                  Colors.grey.shade600,
+                  Colors.grey.shade800,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.green.withOpacity(0.7),
+                  spreadRadius: 2,
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+          ),
+          // UFO dome (cockpit)
+          Positioned(
+            top: 5,
+            child: Container(
+              width: ufo.width * 0.5,
+              height: ufo.height * 0.4,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.cyan.withOpacity(0.9),
+                    Colors.blue.withOpacity(0.7),
+                    Colors.green.withOpacity(0.5),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(0.8),
+                    spreadRadius: 1,
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // UFO lights around the edge
+          ...List.generate(6, (index) {
+            final angle = (index * 60) * (pi / 180);
+            final lightDistance = ufo.width * 0.4;
+            return Transform.translate(
+              offset: Offset(
+                cos(angle) * lightDistance,
+                sin(angle) * lightDistance * 0.3,
+              ),
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: (frameCount + index * 10) % 60 < 30
+                      ? Colors.yellow
+                      : Colors.orange,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.yellow.withOpacity(0.8),
+                      spreadRadius: 1,
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          // Tractor beam effect (optional visual)
+          Positioned(
+            bottom: -5,
+            child: Container(
+              width: ufo.width * 0.3,
+              height: 20,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.green.withOpacity(0.6),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Build enemy bullet widget
+  Widget _buildEnemyBullet(EnemyBullet bullet) {
+    if (!bullet.isVisible) return const SizedBox.shrink();
+    
+    return Positioned(
+      left: bullet.x,
+      top: bullet.y,
+      width: bullet.width,
+      height: bullet.height,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withOpacity(0.5),
+              spreadRadius: 1,
+              blurRadius: 3,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Build boss widget with enhanced alien mothership design
+  Widget _buildBoss(BossUFO boss) {
+    if (!boss.isVisible) return const SizedBox.shrink();
+    
+    // Create pulsing effect for boss
+    final pulseValue = 1.0 + sin(frameCount * 0.05) * 0.15;
+    final healthPercentage = boss.health / boss.maxHealth;
+    
+    return Positioned(
+      left: boss.x,
+      top: boss.y,
+      width: boss.width,
+      height: boss.height,
+      child: Transform.scale(
+        scale: pulseValue,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Boss outer energy field
+            Container(
+              width: boss.width + 25,
+              height: boss.height + 25,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.purple.withOpacity(0.8),
+                    Colors.red.withOpacity(0.5),
+                    Colors.pink.withOpacity(0.3),
+                    Colors.transparent,
+                  ],
+                  stops: [0.2, 0.5, 0.7, 1.0],
+                ),
+              ),
+            ),
+            // Boss main hull (larger saucer)
+            Container(
+              width: boss.width * 0.9,
+              height: boss.height * 0.5,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.horizontal(
+                  left: Radius.circular(boss.width * 0.45),
+                  right: Radius.circular(boss.width * 0.45),
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.grey.shade200,
+                    Colors.grey.shade400,
+                    Colors.grey.shade700,
+                    Colors.black,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.purple.withOpacity(0.9),
+                    spreadRadius: 4,
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+            ),
+            // Boss command center (large dome)
+            Positioned(
+              top: 0,
+              child: Container(
+                width: boss.width * 0.6,
+                height: boss.height * 0.5,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      healthPercentage > 0.5 ? Colors.purple.withOpacity(0.9) : Colors.red.withOpacity(0.9),
+                      healthPercentage > 0.3 ? Colors.blue.withOpacity(0.7) : Colors.orange.withOpacity(0.7),
+                      Colors.green.withOpacity(0.5),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (healthPercentage > 0.5 ? Colors.purple : Colors.red).withOpacity(0.9),
+                      spreadRadius: 3,
+                      blurRadius: 15,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Container(
+                    width: boss.width * 0.2,
+                    height: boss.height * 0.2,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.9),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white,
+                          spreadRadius: 1,
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Boss weapon arrays (multiple lights around edges)
+            ...List.generate(12, (index) {
+              final angle = (index * 30) * (pi / 180);
+              final lightDistance = boss.width * 0.35;
+              return Transform.translate(
+                offset: Offset(
+                  cos(angle) * lightDistance,
+                  sin(angle) * lightDistance * 0.2,
+                ),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: (frameCount + index * 8) % 48 < 24
+                        ? (healthPercentage > 0.5 ? Colors.cyan : Colors.red)
+                        : (healthPercentage > 0.5 ? Colors.purple : Colors.orange),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (healthPercentage > 0.5 ? Colors.cyan : Colors.red).withOpacity(0.8),
+                        spreadRadius: 2,
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            // Boss energy cannons (4 larger weapon ports)
+            ...List.generate(4, (index) {
+              final angle = (index * 90 + 45) * (pi / 180);
+              final cannonDistance = boss.width * 0.25;
+              return Transform.translate(
+                offset: Offset(
+                  cos(angle) * cannonDistance,
+                  sin(angle) * cannonDistance * 0.3,
+                ),
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.white,
+                        healthPercentage > 0.5 ? Colors.purple : Colors.red,
+                        Colors.black,
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (healthPercentage > 0.5 ? Colors.purple : Colors.red).withOpacity(0.9),
+                        spreadRadius: 2,
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            // Boss health indicator (central beam)
+            Positioned(
+              bottom: -10,
+              child: Container(
+                width: boss.width * 0.6 * healthPercentage,
+                height: 30,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      (healthPercentage > 0.5 ? Colors.purple : Colors.red).withOpacity(0.8),
+                      (healthPercentage > 0.3 ? Colors.blue : Colors.orange).withOpacity(0.6),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Boss damage effects (sparks when low health)
+            if (healthPercentage < 0.3) ...
+              List.generate(6, (index) {
+                final sparkAngle = Random().nextDouble() * 2 * pi;
+                final sparkDistance = Random().nextDouble() * boss.width * 0.4;
+                return Transform.translate(
+                  offset: Offset(
+                    cos(sparkAngle) * sparkDistance,
+                    sin(sparkAngle) * sparkDistance,
+                  ),
+                  child: Container(
+                    width: 3,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: frameCount % 20 < 10 ? Colors.orange : Colors.red,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.orange,
+                          spreadRadius: 1,
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
         ),
       ),
     );

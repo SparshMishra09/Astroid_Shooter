@@ -132,52 +132,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 40),
                 
-                // Game mode selection
-                const Text(
-                  'SELECT GAME MODE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                // Classic Mode Button
-                ElevatedButton(
-                  onPressed: () => _startGame(GameMode.classic),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                  ),
-                  child: const Text(
-                    'CLASSIC MODE',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 15),
-                
-                // Survival Mode Button
+                // Play Game Button
                 ElevatedButton(
                   onPressed: () => _startGame(GameMode.survival),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 20),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
+                      borderRadius: BorderRadius.circular(30),
                     ),
+                    elevation: 8,
                   ),
                   child: const Text(
-                    'SURVIVAL MODE',
+                    'PLAY GAME',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
@@ -205,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                       SizedBox(height: 10),
                       Text(
-                        '• Drag to move your spaceship\n• Spaceship shoots automatically\n• Destroy asteroids to score points\n• Avoid asteroid collisions\n\nCLASSIC: Original gameplay\nSURVIVAL: Power-ups & endless waves!',
+                        '• Drag to move your spaceship\n• Spaceship shoots automatically\n• Destroy asteroids & enemies for points\n• Avoid collisions or use shield power-ups\n• Collect power-ups for special abilities\n• Face boss battles every 100 kills!\n\nFeatures: Power-ups, Special Enemies & Boss UFOs!',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,

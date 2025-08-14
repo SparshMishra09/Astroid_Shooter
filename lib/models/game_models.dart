@@ -1,9 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
-// Game modes enum
+// Game modes (currently only Survival, future expansion ready)
 enum GameMode {
-  classic,
   survival,
 }
 
@@ -51,6 +50,11 @@ class Player extends GameObject {
   bool isInvulnerable;
   int invulnerabilityTimer;
   
+  // Combo system
+  double comboMultiplier;
+  int consecutiveHits;
+  bool lastShotHit;
+  
   Player({
     required double x,
     required double y,
@@ -59,7 +63,10 @@ class Player extends GameObject {
     this.lives = 3,
     this.isInvulnerable = false,
     this.invulnerabilityTimer = 0,
-  }) : super(
+  }) : comboMultiplier = 1.0,
+       consecutiveHits = 0,
+       lastShotHit = false,
+       super(
           x: x,
           y: y,
           width: width,
@@ -91,6 +98,38 @@ class Player extends GameObject {
         isInvulnerable = false;
       }
     }
+  }
+  
+  // Combo system methods
+  void registerHit() {
+    consecutiveHits++;
+    lastShotHit = true;
+    
+    // Update multiplier: starts at x1, increases by 0.2 per hit, max x3
+    comboMultiplier = (1.0 + (consecutiveHits * 0.2)).clamp(1.0, 3.0);
+  }
+  
+  void registerMiss() {
+    _resetCombo();
+  }
+  
+  void resetComboOnDamage() {
+    _resetCombo();
+  }
+  
+  void _resetCombo() {
+    consecutiveHits = 0;
+    comboMultiplier = 1.0;
+    lastShotHit = false;
+  }
+  
+  // Get current combo state for UI
+  bool get hasCombo => comboMultiplier > 1.0;
+  String get comboText => 'COMBO x${comboMultiplier.toStringAsFixed(1)}';
+  
+  // Calculate score with combo multiplier
+  int calculateScore(int baseScore) {
+    return (baseScore * comboMultiplier).round();
   }
 }
 
@@ -388,6 +427,150 @@ class FloatingText {
   }
 }
 
+// Particle system for explosion effects
+class Particle {
+  double x;
+  double y;
+  double speedX;
+  double speedY;
+  double size;
+  Color color;
+  int lifeTimer;
+  int maxLifeTime;
+  
+  Particle({
+    required this.x,
+    required this.y,
+    required this.speedX,
+    required this.speedY,
+    required this.size,
+    required this.color,
+    this.lifeTimer = 60,
+  }) : maxLifeTime = lifeTimer;
+  
+  // Update particle position and lifetime
+  void update() {
+    x += speedX;
+    y += speedY;
+    lifeTimer--;
+    
+    // Apply gravity-like effect
+    speedY += 0.1;
+    
+    // Slight air resistance
+    speedX *= 0.98;
+    speedY *= 0.98;
+  }
+  
+  // Check if particle is still alive
+  bool get isAlive => lifeTimer > 0;
+  
+  // Get opacity based on remaining lifetime
+  double get opacity {
+    return (lifeTimer / maxLifeTime.toDouble()).clamp(0.0, 1.0);
+  }
+  
+  // Get current size based on lifetime (shrinks over time)
+  double get currentSize {
+    final progress = 1.0 - (lifeTimer / maxLifeTime.toDouble());
+    return size * (1.0 - progress * 0.5); // Shrinks to 50% of original size
+  }
+}
+
+// Explosion effect system
+class ExplosionEffect {
+  double x;
+  double y;
+  List<Particle> particles;
+  int duration;
+  
+  ExplosionEffect({
+    required this.x,
+    required this.y,
+    int particleCount = 8,
+    this.duration = 60,
+  }) : particles = [] {
+    _createParticles(particleCount);
+  }
+  
+  void _createParticles(int count) {
+    final random = Random();
+    
+    for (int i = 0; i < count; i++) {
+      final angle = (i / count) * 2 * pi;
+      final speed = 1.0 + random.nextDouble() * 3.0;
+      
+      particles.add(Particle(
+        x: x,
+        y: y,
+        speedX: cos(angle) * speed,
+        speedY: sin(angle) * speed,
+        size: 2.0 + random.nextDouble() * 4.0,
+        color: _getRandomExplosionColor(random),
+        lifeTimer: 30 + random.nextInt(30), // 0.5 to 1 second
+      ));
+    }
+  }
+  
+  Color _getRandomExplosionColor(Random random) {
+    final colors = [
+      Colors.orange,
+      Colors.red,
+      Colors.yellow,
+      Colors.deepOrange,
+      Colors.amber,
+    ];
+    return colors[random.nextInt(colors.length)];
+  }
+  
+  // Update all particles in the explosion
+  void update() {
+    for (var particle in particles) {
+      particle.update();
+    }
+    
+    // Remove dead particles
+    particles.removeWhere((particle) => !particle.isAlive);
+    
+    duration--;
+  }
+  
+  // Check if explosion is still active
+  bool get isActive => particles.isNotEmpty && duration > 0;
+}
+
+// Hit effect for enemies
+class HitEffect {
+  double x;
+  double y;
+  Color color;
+  int lifeTimer;
+  double size;
+  
+  HitEffect({
+    required this.x,
+    required this.y,
+    required this.color,
+    this.lifeTimer = 30,
+    this.size = 20.0,
+  });
+  
+  void update() {
+    lifeTimer--;
+  }
+  
+  bool get isActive => lifeTimer > 0;
+  
+  double get opacity {
+    return (lifeTimer / 30.0).clamp(0.0, 1.0);
+  }
+  
+  double get currentSize {
+    final progress = 1.0 - (lifeTimer / 30.0);
+    return size * (1.0 + progress * 0.5); // Grows slightly over time
+  }
+}
+
 // Enemy types enum
 enum EnemyType {
   normalAsteroid,
@@ -454,7 +637,7 @@ class SmallFastAsteroid extends Enemy {
           width: size,
           height: size,
           health: 1,
-          scoreValue: 2,
+          scoreValue: 15, // Small fast asteroid: 15 points
         );
   
   @override
@@ -501,7 +684,7 @@ class HugeSlowAsteroid extends Enemy {
           width: size,
           height: size,
           health: 3,
-          scoreValue: 10,
+          scoreValue: 30, // Huge slow asteroid: 30 points
         );
   
   @override
@@ -550,7 +733,7 @@ class EnemyUFO extends Enemy {
           width: width,
           height: height,
           health: 5,
-          scoreValue: 25,
+          scoreValue: 40, // UFO: 40 points
         );
   
   @override
@@ -617,8 +800,8 @@ class BossUFO extends Enemy {
           y: y,
           width: width,
           height: height,
-          health: 20,
-          scoreValue: 100,
+          health: 50,
+          scoreValue: 200, // Boss UFO: 200 points
         );
   
   @override
