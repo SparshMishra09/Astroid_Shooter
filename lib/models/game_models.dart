@@ -230,11 +230,38 @@ class GameState {
   bool isGameOver = false;
   bool isPaused = false;
   
+  // Wave system properties
+  int currentWave = 1;
+  int waveTimer = 0;
+  int waveBreakTimer = 0;
+  bool isWaveBreak = false;
+  bool showWaveComplete = false;
+  int waveCompleteTimer = 0;
+  bool showWaveStart = false;
+  int waveStartTimer = 0;
+  
+  // Wave constants (in frames at 60fps) - faster pacing
+  static const int waveMinDuration = 2100; // 35 seconds
+  static const int waveMaxDuration = 2700; // 45 seconds
+  static const int waveBreakDuration = 180; // 3 seconds
+  static const int waveCompleteDisplayTime = 120; // 2 seconds
+  static const int waveStartDisplayTime = 90; // 1.5 seconds
+  
   // Reset game state for a new game
   void reset() {
     score = 0;
     isGameOver = false;
     isPaused = false;
+    
+    // Reset wave system
+    currentWave = 1;
+    waveTimer = 0;
+    waveBreakTimer = 0;
+    isWaveBreak = false;
+    showWaveComplete = false;
+    waveCompleteTimer = 0;
+    showWaveStart = true;
+    waveStartTimer = waveStartDisplayTime;
   }
   
   // Update high score if current score is higher
@@ -243,6 +270,75 @@ class GameState {
       highScore = score;
     }
   }
+  
+  // Get current wave duration (45-60 seconds based on wave number)
+  int getWaveDuration() {
+    // Later waves last slightly longer
+    final baseLength = waveMinDuration;
+    final extraTime = (currentWave * 50).clamp(0, waveMaxDuration - waveMinDuration);
+    return baseLength + extraTime;
+  }
+  
+  // Start a new wave
+  void startNewWave() {
+    currentWave++;
+    waveTimer = 0;
+    isWaveBreak = false;
+    showWaveComplete = false;
+    waveCompleteTimer = 0;
+    showWaveStart = true;
+    waveStartTimer = waveStartDisplayTime;
+  }
+  
+  // Complete current wave and start break
+  void completeWave() {
+    isWaveBreak = true;
+    waveBreakTimer = waveBreakDuration;
+    showWaveComplete = true;
+    waveCompleteTimer = waveCompleteDisplayTime;
+    
+    // Award wave completion bonus
+    final bonus = 200 * currentWave;
+    score += bonus;
+  }
+  
+  // Update wave timers
+  void updateWaveSystem() {
+    // Handle wave start animation
+    if (showWaveStart && waveStartTimer > 0) {
+      waveStartTimer--;
+      if (waveStartTimer <= 0) {
+        showWaveStart = false;
+      }
+    }
+    
+    if (isWaveBreak) {
+      // Handle wave break
+      waveBreakTimer--;
+      if (waveCompleteTimer > 0) {
+        waveCompleteTimer--;
+        if (waveCompleteTimer <= 0) {
+          showWaveComplete = false;
+        }
+      }
+      
+      if (waveBreakTimer <= 0) {
+        startNewWave();
+      }
+    } else {
+      // Handle normal wave progression
+      waveTimer++;
+      if (waveTimer >= getWaveDuration()) {
+        completeWave();
+      }
+    }
+  }
+  
+  // Get wave progress percentage (0.0 to 1.0)
+  double getWaveProgress() {
+    if (isWaveBreak) return 0.0;
+    return (waveTimer / getWaveDuration()).clamp(0.0, 1.0);
+  }
 }
 
 // Power-up object that drops from destroyed asteroids
@@ -250,7 +346,7 @@ class PowerUp extends GameObject {
   PowerUpType type;
   double speedY;
   int lifeTimer;
-  final int maxLifeTime = 360; // 6 seconds at 60fps
+  final int maxLifeTime = 900; // 15 seconds at 60fps
   
   PowerUp({
     required double x,
@@ -259,7 +355,7 @@ class PowerUp extends GameObject {
     double width = 30,
     double height = 30,
     this.speedY = 1.5,
-  }) : lifeTimer = 360, // 6 seconds at 60fps
+  }) : lifeTimer = 900, // 15 seconds at 60fps
        super(
           x: x,
           y: y,

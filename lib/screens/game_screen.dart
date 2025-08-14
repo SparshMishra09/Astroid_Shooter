@@ -200,24 +200,57 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     // Update frame counter
     frameCount++;
     
-    // Auto-shoot bullets at regular intervals
-    final currentInterval = widget.gameMode == GameMode.survival ? _getCurrentShotInterval() : shotInterval;
-    if (frameCount - lastShotFrame >= currentInterval) {
-      _fireBullet();
-      lastShotFrame = frameCount;
-    }
+    // Update wave system
+    gameState.updateWaveSystem();
     
-    // Spawn new asteroid at regular intervals
-    if (frameCount % asteroidSpawnRate == 0) {
-      asteroids.add(Asteroid.random(screenWidth, asteroidSize));
+    // Check if wave break is active - limit game activity during breaks
+    if (!gameState.isWaveBreak) {
+      // Auto-shoot bullets at regular intervals
+      final currentInterval = widget.gameMode == GameMode.survival ? _getCurrentShotInterval() : shotInterval;
+      if (frameCount - lastShotFrame >= currentInterval) {
+        _fireBullet();
+        lastShotFrame = frameCount;
+      }
       
-      // Increase difficulty by spawning asteroids more frequently as score increases
-      if (gameState.score > 0 && gameState.score % 10 == 0) {
-        asteroidSpawnRate = max(20, asteroidSpawnRate - 2); // Min spawn rate is 20 frames
+      // Spawn new asteroid at regular intervals (adjusted for wave system)
+      final waveSpawnRate = _getWaveAdjustedSpawnRate();
+      if (frameCount % waveSpawnRate == 0) {
+        asteroids.add(Asteroid.random(screenWidth, asteroidSize));
+      }
+      
+      // Update power-ups and enemies
+      _updatePowerUps();
+      _updateEnemies();
+      _spawnEnemies();
+    } else {
+      // During wave break, still update existing objects but don't spawn new ones
+      _updatePowerUps();
+      _updateEnemies();
+      
+      // 20% chance of free power-up drop during wave break (once per break)
+      if (gameState.waveBreakTimer == GameState.waveBreakDuration - 60) { // 1 second into break
+        final random = Random();
+        if (random.nextDouble() < 0.20) { // 20% chance
+          final powerUp = PowerUp.random(
+            screenWidth / 2 - 15, // Center of screen
+            screenHeight / 2 - 100, // Above center
+          );
+          powerUps.add(powerUp);
+          
+          // Show bonus power-up text
+          final text = FloatingText(
+            text: 'Bonus Power-Up!',
+            x: screenWidth / 2 - 60,
+            y: screenHeight / 2 - 150,
+            color: Colors.cyan,
+            lifeTimer: 180,
+          );
+          floatingTexts.add(text);
+        }
       }
     }
     
-    // Update player
+    // Update player (always active)
     player.update();
     
     // Update asteroids
@@ -229,11 +262,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     for (var bullet in bullets) {
       bullet.update(screenWidth);
     }
-    
-    // Update power-ups and enemies
-    _updatePowerUps();
-    _updateEnemies();
-    _spawnEnemies();
     
     // Check for collisions
     _checkCollisions();
@@ -711,6 +739,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return shotInterval;
   }
   
+  // Get wave-adjusted spawn rate for asteroids
+  int _getWaveAdjustedSpawnRate() {
+    // More aggressive spawn rate scaling for engaging gameplay
+    // Base spawn rate starts at 45 frames (0.75 seconds) - faster from start
+    final baseRate = 45;
+    final waveAdjustment = (gameState.currentWave * 3).clamp(0, 30);
+    return max(18, baseRate - waveAdjustment); // Min spawn rate is 18 frames (0.3 seconds)
+  }
+  
   // Enemy system methods
   void _updateEnemies() {
     // Update all enemies
@@ -785,19 +822,96 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     // Skip enemy spawning if boss is active
     if (activeBoss != null) return;
     
-    // Spawn enemies with probability every 180 frames (3 seconds)
-    if (frameCount % 180 == 0) {
+    // Calculate wave-based enemy spawn interval and probabilities
+    final waveSpawnInterval = _getWaveEnemySpawnInterval();
+    
+    // Spawn enemies based on wave-adjusted interval
+    if (frameCount % waveSpawnInterval == 0) {
       final random = Random();
       final roll = random.nextDouble();
       
-      if (roll < 0.25) { // 25% chance for small fast asteroid
+      // Get wave-based enemy probabilities
+      final enemyProbabilities = _getWaveEnemyProbabilities();
+      
+      if (roll < enemyProbabilities['smallFast']!) {
+        // Small fast asteroid - appears starting wave 2
         enemies.add(SmallFastAsteroid.random(screenWidth, asteroidSize));
-      } else if (roll < 0.35) { // 10% chance for huge slow asteroid
+      } else if (roll < enemyProbabilities['hugeSlow']!) {
+        // Huge slow asteroid - appears starting wave 4
         enemies.add(HugeSlowAsteroid.random(screenWidth, asteroidSize));
-      } else if (roll < 0.40) { // 5% chance for UFO
+      } else if (roll < enemyProbabilities['ufo']!) {
+        // UFO - appears starting wave 6
         enemies.add(EnemyUFO.random(screenWidth, 60));
       }
+      // If roll doesn't match any enemy type, no special enemy spawns (normal asteroids only)
     }
+  }
+  
+  // Get wave-adjusted enemy spawn interval
+  int _getWaveEnemySpawnInterval() {
+    // More aggressive enemy spawn timing for engaging gameplay
+    // Start with 180 frames (3 seconds) and decrease with waves
+    // Min interval is 90 frames (1.5 seconds) at high waves
+    final baseInterval = 180;
+    final waveReduction = (gameState.currentWave - 1) * 20;
+    return max(90, baseInterval - waveReduction);
+  }
+  
+  // Get wave-based enemy spawn probabilities
+  Map<String, double> _getWaveEnemyProbabilities() {
+    final wave = gameState.currentWave;
+    
+    // Wave 1: Only normal asteroids (no special enemies)
+    if (wave == 1) {
+      return {
+        'smallFast': 0.0,
+        'hugeSlow': 0.0,
+        'ufo': 0.0,
+      };
+    }
+    
+    // Wave 2-3: Introduce small fast asteroids (15% chance)
+    if (wave <= 3) {
+      return {
+        'smallFast': 0.15,
+        'hugeSlow': 0.0,
+        'ufo': 0.0,
+      };
+    }
+    
+    // Wave 4-5: Add huge slow asteroids (10% for small, 5% for huge)
+    if (wave <= 5) {
+      return {
+        'smallFast': 0.20,
+        'hugeSlow': 0.25, // 20% small + 5% huge
+        'ufo': 0.0,
+      };
+    }
+    
+    // Wave 6-8: Introduce UFOs (15% small, 8% huge, 3% ufo)
+    if (wave <= 8) {
+      return {
+        'smallFast': 0.25,
+        'hugeSlow': 0.33, // 25% small + 8% huge
+        'ufo': 0.36, // + 3% ufo
+      };
+    }
+    
+    // Wave 9-12: Increase all enemy types (20% small, 12% huge, 5% ufo)
+    if (wave <= 12) {
+      return {
+        'smallFast': 0.30,
+        'hugeSlow': 0.42, // 30% small + 12% huge
+        'ufo': 0.47, // + 5% ufo
+      };
+    }
+    
+    // Wave 13+: High difficulty (25% small, 15% huge, 8% ufo)
+    return {
+      'smallFast': 0.35,
+      'hugeSlow': 0.50, // 35% small + 15% huge
+      'ufo': 0.58, // + 8% ufo
+    };
   }
   
   // Handle player getting hit
@@ -1017,6 +1131,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 ),
               ),
               
+              // Subtle wave notifications (non-intrusive)
+              if (gameState.showWaveStart) _buildWaveNotification(),
+              
+              // Wave completion notification
+              if (gameState.showWaveComplete) _buildWaveCompleteNotification(),
+              
               // Game over overlay
               if (gameState.isGameOver) _buildGameOverOverlay(),
               
@@ -1144,6 +1264,32 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Wave number display
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.orange.withOpacity(0.8),
+                        Colors.red.withOpacity(0.8),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 2,
+                    ),
+                  ),
+                  child: Text(
+                    'Wave ${gameState.currentWave}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 // High Score
                 Text(
                   'High Score: ${gameState.highScore}',
@@ -1171,6 +1317,71 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
+                
+                // Wave progress indicator (during wave)
+                if (!gameState.isWaveBreak)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Wave Progress',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Container(
+                          width: 100,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: gameState.getWaveProgress(),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.green,
+                                    Colors.yellow,
+                                    Colors.red,
+                                  ],
+                                  stops: [0.0, 0.5, 1.0],
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                
+                // Wave break countdown
+                if (gameState.isWaveBreak)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.cyan.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Next Wave: ${(gameState.waveBreakTimer / 60).ceil()}s',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
                 
                 // Power-up status (Survival mode only)
                 if (widget.gameMode == GameMode.survival && activePowerUps.isNotEmpty) ...
@@ -1301,6 +1512,25 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
               child: const Text(
                 'Play Again',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              onPressed: () {
+                // Cancel the game timer
+                if (gameTimer.isActive) {
+                  gameTimer.cancel();
+                }
+                // Navigate back to main menu
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey,
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+              ),
+              child: const Text(
+                'Main Menu',
                 style: TextStyle(fontSize: 18),
               ),
             ),
@@ -1775,6 +2005,329 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               spreadRadius: 1,
               blurRadius: 3,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Build wave start overlay
+  Widget _buildWaveStartOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.6),
+      width: screenWidth,
+      height: screenHeight,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Animated wave start text with scaling effect
+            Transform.scale(
+              scale: 1.2 + sin(frameCount * 0.15) * 0.3,
+              child: Text(
+                'WAVE ${gameState.currentWave}',
+                style: TextStyle(
+                  color: Colors.cyan,
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      blurRadius: 15,
+                      color: Colors.blue,
+                      offset: Offset(0, 0),
+                    ),
+                    Shadow(
+                      blurRadius: 3,
+                      color: Colors.black,
+                      offset: Offset(2, 2),
+                    ),
+                  ],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Sub text with wave guidance
+            Text(
+              gameState.currentWave == 1 
+                  ? 'Survive the asteroid field!'
+                  : gameState.currentWave <= 3
+                      ? 'New enemies incoming!'
+                      : gameState.currentWave <= 6
+                          ? 'Beware of huge asteroids!'
+                          : 'UFOs have joined the battle!',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 20,
+                fontStyle: FontStyle.italic,
+                shadows: [
+                  Shadow(
+                    blurRadius: 2,
+                    color: Colors.black,
+                    offset: Offset(1, 1),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
+            
+            // Countdown or ready indicator
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.cyan.withOpacity(0.7),
+                    Colors.blue.withOpacity(0.7),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
+              ),
+              child: Text(
+                'Get Ready!',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Build wave complete overlay
+  Widget _buildWaveCompleteOverlay() {
+    final bonus = 200 * (gameState.currentWave - 1); // Previous wave bonus
+    
+    return Container(
+      color: Colors.black.withOpacity(0.8),
+      width: screenWidth,
+      height: screenHeight,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Animated wave complete text
+            Transform.scale(
+              scale: 1.0 + sin(frameCount * 0.1) * 0.1,
+              child: Text(
+                'Wave ${gameState.currentWave - 1} Complete!',
+                style: TextStyle(
+                  color: Colors.yellow,
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      blurRadius: 10,
+                      color: Colors.orange,
+                      offset: Offset(0, 0),
+                    ),
+                    Shadow(
+                      blurRadius: 2,
+                      color: Colors.black,
+                      offset: Offset(2, 2),
+                    ),
+                  ],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 30),
+            
+            // Wave bonus info
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.blue.withOpacity(0.8),
+                    Colors.purple.withOpacity(0.8),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Wave Bonus: +$bonus points',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Preparing Wave ${gameState.currentWave}...',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  // Countdown timer
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Next wave in: ${(gameState.waveBreakTimer / 60).ceil()}s',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Rest and prepare message
+            Text(
+              'Take a breath! Collect any power-ups on screen.',
+              style: TextStyle(
+                color: Colors.cyan.withOpacity(0.8),
+                fontSize: 16,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Build subtle wave notification (non-intrusive)
+  Widget _buildWaveNotification() {
+    return Positioned(
+      top: 140,
+      right: 10,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 500),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.cyan.withOpacity(0.9),
+              Colors.blue.withOpacity(0.9),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.white,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.cyan.withOpacity(0.6),
+              spreadRadius: 2,
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'WAVE ${gameState.currentWave}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              gameState.currentWave == 1 
+                  ? 'Survive!'
+                  : gameState.currentWave <= 3
+                      ? 'New Enemies!'
+                      : gameState.currentWave <= 6
+                          ? 'Huge Asteroids!'
+                          : 'UFOs Attack!',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Build subtle wave complete notification
+  Widget _buildWaveCompleteNotification() {
+    final bonus = 200 * (gameState.currentWave - 1);
+    
+    return Positioned(
+      top: 140,
+      right: 10,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 500),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.yellow.withOpacity(0.9),
+              Colors.orange.withOpacity(0.9),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.white,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.yellow.withOpacity(0.6),
+              spreadRadius: 2,
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Wave Complete!',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (bonus > 0) ...
+              [
+                const SizedBox(height: 4),
+                Text(
+                  '+$bonus bonus',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
           ],
         ),
       ),
