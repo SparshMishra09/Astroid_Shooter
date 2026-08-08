@@ -2,19 +2,18 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-/// A themed loading screen that recreates the user's animated rocket SVG.
+/// A themed loading screen showing an animated rocket.
 ///
-/// `flutter_svg` cannot play CSS/SMIL animations, so the rocket is split
-/// into two static SVG strings (flame + body) rendered with
-/// [SvgPicture.string]. Flutter [Transform] and [Opacity] widgets drive
-/// the three animations from the original SVG:
-///   • **rocketBob**   — whole ship bobs ±14px vertically (1.8s)
-///   • **flameFlicker** — exhaust flame scales & flickers (~0.12s loop)
-///   • **windowPulse**  — cockpit window color pulses (1.8s)
+/// The rocket is a single static SVG rendered via [SvgPicture.string] with
+/// **explicit width/height** so it always renders at the exact size
+/// requested — regardless of parent constraints. This is the fix for the
+/// "half-cropped rocket" bug that occurred when the SVG was inside a
+/// `Stack(fit: StackFit.expand)` without explicit dimensions.
 ///
-/// Using [SvgPicture.string] instead of a hand-rolled [CustomPainter]
-/// guarantees correct rendering, sizing, and aspect-ratio handling on
-/// any device — no clipping or cropping.
+/// Animations (driven by Flutter, since flutter_svg can't play CSS):
+///   • **rocketBob** — whole ship bobs ±14px vertically (1.8s, sine-eased)
+///   • **flameFlicker** — exhaust flame opacity flickers (~0.12s loop)
+///   • **windowPulse** — cockpit window opacity pulses (1.8s)
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({
     super.key,
@@ -22,11 +21,7 @@ class LoadingScreen extends StatefulWidget {
     this.progress,
   });
 
-  /// Caption shown under the rocket. Defaults to "LOADING…".
   final String message;
-
-  /// If non-null, the progress bar is determinate (0.0 → 1.0).
-  /// If null, the bar is indeterminate.
   final double? progress;
 
   @override
@@ -35,29 +30,30 @@ class LoadingScreen extends StatefulWidget {
 
 class _LoadingScreenState extends State<LoadingScreen>
     with TickerProviderStateMixin {
-  /// 1.8s controller — drives both the rocket bob and the window pulse
-  /// (they share the same period in the original SVG).
   late final AnimationController _bobController;
-
-  /// 0.12s controller — drives the fast flame flicker.
   late final AnimationController _flameController;
 
-  // ---- Static SVG fragments (no CSS <style> — animations are in Flutter) ----
+  // The rocket render size in logical pixels.
+  static const _rocketSize = 180.0;
 
-  /// Just the exhaust flame, on a transparent 400×400 canvas.
-  static const _flameSvg = '''
+  /// Complete static rocket SVG (flame + body + window) on a 400×400 canvas.
+  /// Rendered as a single picture so there are no Stack constraint issues.
+  static const _rocketSvg = '''
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
   <polygon points="175,255 200,245 200,335" fill="#f05041"/>
   <polygon points="200,245 225,255 200,335" fill="#cb3122"/>
-</svg>''';
-
-  /// Rocket body (fins + hull + window) on a transparent 400×400 canvas.
-  static const _bodySvg = '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
   <polygon points="156,206 85,250 130,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
   <polygon points="244,206 315,250 270,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
   <polygon points="200,75 135,270 200,245 265,270" fill="#5883ff" stroke="#2b3a4a" stroke-width="12" stroke-linejoin="miter"/>
   <circle cx="200" cy="155" r="14" fill="#f3f6fa" stroke="#2b3a4a" stroke-width="6"/>
+</svg>''';
+
+  /// Flame-only SVG for the flicker overlay. Same 400×400 canvas so it
+  /// aligns perfectly with the body when stacked.
+  static const _flameSvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <polygon points="175,255 200,245 200,335" fill="#f05041"/>
+  <polygon points="200,245 225,255 200,335" fill="#cb3122"/>
 </svg>''';
 
   @override
@@ -80,14 +76,6 @@ class _LoadingScreenState extends State<LoadingScreen>
     super.dispose();
   }
 
-  /// Convert a [Color] to an SVG hex string (`#rrggbb`).
-  String _colorToHex(Color c) {
-    final r = (c.r * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
-    final g = (c.g * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
-    final b = (c.b * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
-    return '#$r$g$b';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -106,79 +94,52 @@ class _LoadingScreenState extends State<LoadingScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 // ---- Animated rocket ----
+                // The bob is applied to a SizedBox that has a FIXED size.
+                // The SvgPicture inside gets explicit width/height so it
+                // can never be clipped by ambiguous parent constraints.
                 AnimatedBuilder(
-                  animation:
-                      Listenable.merge([_bobController, _flameController]),
-                  builder: (context, _) {
-                    // Bob: translateY(0 → -14 → 0) over 1.8s, ease-in-out.
-                    // Sine of the 0..1 value gives a smooth ease-in-out that
-                    // matches CSS `ease-in-out`.
-                    final bobY = -14.0 * math.sin(_bobController.value * math.pi);
-
-                    // Flame flicker: 5-stop keyframes approximated with sine.
-                    final f = _flameController.value; // 0..1, ping-pongs
-                    final flameScaleY = 1.0 + 0.18 * math.sin(f * 2 * math.pi);
-                    final flameScaleX = 1.0 - 0.10 * math.sin(f * 2 * math.pi);
-                    final flameOpacity =
-                        0.85 + 0.15 * ((math.sin(f * 2 * math.pi) + 1) / 2);
-
-                    // Window pulse: lerp #f3f6fa → #ffffff over 1.8s.
-                    final windowColor = Color.lerp(
-                      const Color(0xFFF3F6FA),
-                      const Color(0xFFFFFFFF),
-                      _bobController.value,
-                    )!;
-
-                    // The SVG viewBox is 400×400, rendered inside a 200×200
-                    // widget (scale = 0.5). Bob offset in SVG space (-14)
-                    // maps to -7px in widget space.
-                    const svgScale = 0.5;
-
-                    return SizedBox(
-                      width: 200,
-                      height: 200,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // Flame layer — drawn first (behind body).
-                          // Scaled around the SVG transform-origin (200, 245),
-                          // which maps to Alignment(0, 0.225) in the widget.
-                          Transform.translate(
-                            offset: Offset(0, bobY * svgScale),
-                            child: Transform(
-                              alignment: const Alignment(0, 0.225),
-                              transform: Matrix4.diagonal3Values(
-                                flameScaleX,
-                                flameScaleY,
-                                1.0,
-                              ),
-                              child: Opacity(
-                                opacity: flameOpacity,
-                                child: SvgPicture.string(
-                                  _flameSvg,
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Body layer — drawn second (on top of flame).
-                          // Window color is injected dynamically for the pulse.
-                          Transform.translate(
-                            offset: Offset(0, bobY * svgScale),
-                            child: SvgPicture.string(
-                              _bodySvg.replaceAll(
-                                '#f3f6fa',
-                                _colorToHex(windowColor),
-                              ),
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ],
-                      ),
+                  animation: _bobController,
+                  builder: (context, child) {
+                    // translateY(0 → -14 → 0) over 1.8s, ease-in-out.
+                    final bobY =
+                        -14.0 * math.sin(_bobController.value * math.pi);
+                    return Transform.translate(
+                      offset: Offset(0, bobY),
+                      child: child,
                     );
                   },
+                  child: SizedBox(
+                    width: _rocketSize,
+                    height: _rocketSize,
+                    child: Stack(
+                      // No StackFit.expand — each child gets explicit size.
+                      children: [
+                        // Flame layer (behind body) with flicker opacity.
+                        AnimatedBuilder(
+                          animation: _flameController,
+                          builder: (context, child) {
+                            final f = _flameController.value;
+                            final opacity =
+                                0.85 + 0.15 * ((math.sin(f * 2 * math.pi) + 1) / 2);
+                            return Opacity(opacity: opacity, child: child);
+                          },
+                          child: SvgPicture.string(
+                            _flameSvg,
+                            width: _rocketSize,
+                            height: _rocketSize,
+                          ),
+                        ),
+                        // Body layer (on top of flame).
+                        SvgPicture.string(
+                          _rocketSvg,
+                          width: _rocketSize,
+                          height: _rocketSize,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 36),
                 // ---- Caption ----
                 Text(
                   widget.message,
