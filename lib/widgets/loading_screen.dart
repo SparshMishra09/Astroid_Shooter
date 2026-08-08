@@ -1,18 +1,20 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 /// A themed loading screen that recreates the user's animated rocket SVG.
 ///
-/// `flutter_svg` cannot play CSS/SMIL animations, so the rocket is drawn
-/// natively with a [CustomPainter]. Three animations run off a single
-/// [AnimationController]:
-///   • **rocketBob**  — the whole ship bobs ±14px vertically (1.8s)
-///   • **flameFlicker** — the exhaust flame scales & flickers (~0.12s loop)
-///   • **windowPulse** — the cockpit window color pulses (1.8s)
+/// `flutter_svg` cannot play CSS/SMIL animations, so the rocket is split
+/// into two static SVG strings (flame + body) rendered with
+/// [SvgPicture.string]. Flutter [Transform] and [Opacity] widgets drive
+/// the three animations from the original SVG:
+///   • **rocketBob**   — whole ship bobs ±14px vertically (1.8s)
+///   • **flameFlicker** — exhaust flame scales & flickers (~0.12s loop)
+///   • **windowPulse**  — cockpit window color pulses (1.8s)
 ///
-/// A small "LOADING…" caption and a linear progress bar sit underneath.
-/// An optional [message] can override the caption, and an optional
-/// [progress] (0.0–1.0) switches the bar from indeterminate to determinate.
+/// Using [SvgPicture.string] instead of a hand-rolled [CustomPainter]
+/// guarantees correct rendering, sizing, and aspect-ratio handling on
+/// any device — no clipping or cropping.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({
     super.key,
@@ -33,8 +35,30 @@ class LoadingScreen extends StatefulWidget {
 
 class _LoadingScreenState extends State<LoadingScreen>
     with TickerProviderStateMixin {
-  late final AnimationController _bobController; // 1.8s bob + window pulse
-  late final AnimationController _flameController; // 0.12s flame flicker
+  /// 1.8s controller — drives both the rocket bob and the window pulse
+  /// (they share the same period in the original SVG).
+  late final AnimationController _bobController;
+
+  /// 0.12s controller — drives the fast flame flicker.
+  late final AnimationController _flameController;
+
+  // ---- Static SVG fragments (no CSS <style> — animations are in Flutter) ----
+
+  /// Just the exhaust flame, on a transparent 400×400 canvas.
+  static const _flameSvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <polygon points="175,255 200,245 200,335" fill="#f05041"/>
+  <polygon points="200,245 225,255 200,335" fill="#cb3122"/>
+</svg>''';
+
+  /// Rocket body (fins + hull + window) on a transparent 400×400 canvas.
+  static const _bodySvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <polygon points="156,206 85,250 130,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
+  <polygon points="244,206 315,250 270,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
+  <polygon points="200,75 135,270 200,245 265,270" fill="#5883ff" stroke="#2b3a4a" stroke-width="12" stroke-linejoin="miter"/>
+  <circle cx="200" cy="155" r="14" fill="#f3f6fa" stroke="#2b3a4a" stroke-width="6"/>
+</svg>''';
 
   @override
   void initState() {
@@ -56,6 +80,14 @@ class _LoadingScreenState extends State<LoadingScreen>
     super.dispose();
   }
 
+  /// Convert a [Color] to an SVG hex string (`#rrggbb`).
+  String _colorToHex(Color c) {
+    final r = (c.r * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
+    final g = (c.g * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
+    final b = (c.b * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
+    return '#$r$g$b';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,205 +101,116 @@ class _LoadingScreenState extends State<LoadingScreen>
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const Spacer(flex: 2),
-              // Animated rocket
-              AnimatedBuilder(
-                animation: Listenable.merge([_bobController, _flameController]),
-                builder: (context, _) {
-                  return SizedBox(
-                    width: 220,
-                    height: 220,
-                    child: CustomPaint(
-                      painter: _RocketPainter(
-                        bob: _bobController.value,
-                        flame: _flameController.value,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ---- Animated rocket ----
+                AnimatedBuilder(
+                  animation:
+                      Listenable.merge([_bobController, _flameController]),
+                  builder: (context, _) {
+                    // Bob: translateY(0 → -14 → 0) over 1.8s, ease-in-out.
+                    // Sine of the 0..1 value gives a smooth ease-in-out that
+                    // matches CSS `ease-in-out`.
+                    final bobY = -14.0 * math.sin(_bobController.value * math.pi);
+
+                    // Flame flicker: 5-stop keyframes approximated with sine.
+                    final f = _flameController.value; // 0..1, ping-pongs
+                    final flameScaleY = 1.0 + 0.18 * math.sin(f * 2 * math.pi);
+                    final flameScaleX = 1.0 - 0.10 * math.sin(f * 2 * math.pi);
+                    final flameOpacity =
+                        0.85 + 0.15 * ((math.sin(f * 2 * math.pi) + 1) / 2);
+
+                    // Window pulse: lerp #f3f6fa → #ffffff over 1.8s.
+                    final windowColor = Color.lerp(
+                      const Color(0xFFF3F6FA),
+                      const Color(0xFFFFFFFF),
+                      _bobController.value,
+                    )!;
+
+                    // The SVG viewBox is 400×400, rendered inside a 200×200
+                    // widget (scale = 0.5). Bob offset in SVG space (-14)
+                    // maps to -7px in widget space.
+                    const svgScale = 0.5;
+
+                    return SizedBox(
+                      width: 200,
+                      height: 200,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // Flame layer — drawn first (behind body).
+                          // Scaled around the SVG transform-origin (200, 245),
+                          // which maps to Alignment(0, 0.225) in the widget.
+                          Transform.translate(
+                            offset: Offset(0, bobY * svgScale),
+                            child: Transform(
+                              alignment: const Alignment(0, 0.225),
+                              transform: Matrix4.diagonal3Values(
+                                flameScaleX,
+                                flameScaleY,
+                                1.0,
+                              ),
+                              child: Opacity(
+                                opacity: flameOpacity,
+                                child: SvgPicture.string(
+                                  _flameSvg,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Body layer — drawn second (on top of flame).
+                          // Window color is injected dynamically for the pulse.
+                          Transform.translate(
+                            offset: Offset(0, bobY * svgScale),
+                            child: SvgPicture.string(
+                              _bodySvg.replaceAll(
+                                '#f3f6fa',
+                                _colorToHex(windowColor),
+                              ),
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  );
-                },
-              ),
-              const Spacer(flex: 1),
-              // Caption
-              Text(
-                widget.message,
-                style: const TextStyle(
-                  color: Color(0xFF8FA3C8),
-                  fontSize: 14,
-                  letterSpacing: 6,
-                  fontWeight: FontWeight.w600,
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(height: 18),
-              // Progress bar
-              SizedBox(
-                width: 220,
-                child: widget.progress != null
-                    ? LinearProgressIndicator(
-                        value: widget.progress!.clamp(0.0, 1.0),
-                        minHeight: 4,
-                        backgroundColor: const Color(0xFF1E2A44),
-                        color: const Color(0xFF5883FF),
-                      )
-                    : LinearProgressIndicator(
-                        minHeight: 4,
-                        backgroundColor: const Color(0xFF1E2A44),
-                        color: const Color(0xFF5883FF),
-                      ),
-              ),
-              const Spacer(flex: 2),
-            ],
+                const SizedBox(height: 30),
+                // ---- Caption ----
+                Text(
+                  widget.message,
+                  style: const TextStyle(
+                    color: Color(0xFF8FA3C8),
+                    fontSize: 14,
+                    letterSpacing: 6,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                // ---- Progress bar ----
+                SizedBox(
+                  width: 220,
+                  child: widget.progress != null
+                      ? LinearProgressIndicator(
+                          value: widget.progress!.clamp(0.0, 1.0),
+                          minHeight: 4,
+                          backgroundColor: const Color(0xFF1E2A44),
+                          color: const Color(0xFF5883FF),
+                        )
+                      : LinearProgressIndicator(
+                          minHeight: 4,
+                          backgroundColor: const Color(0xFF1E2A44),
+                          color: const Color(0xFF5883FF),
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
-
-/// Paints the rocket from the loading SVG.
-///
-/// Coordinates mirror the 400×400 viewBox of `loading_rocket.svg`, scaled
-/// into the paint area. The [bob] value (0→1) drives the vertical bob via a
-/// sine wave; the [flame] value (0→1) drives flame scale/opacity.
-class _RocketPainter extends CustomPainter {
-  _RocketPainter({required this.bob, required this.flame});
-
-  /// 0..1 from the 1.8s bob controller.
-  final double bob;
-  /// 0..1 from the 0.12s flame controller.
-
-  final double flame;
-
-  // Original SVG palette.
-  static const _hull = Color(0xFF5883FF);
-  static const _hullStroke = Color(0xFF2B3A4A);
-  static const _fin = Color(0xFF0082DF);
-  static const _window = Color(0xFFF3F6FA);
-  static const _windowBright = Color(0xFFFFFFFF);
-  static const _flameOuter = Color(0xFFF05041);
-  static const _flameInner = Color(0xFFCB3122);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Scale the 400×400 viewBox to fit the paint area, preserving aspect.
-    final s = size.width / 400;
-    canvas.save();
-    canvas.scale(s);
-
-    // --- Bob: translate the whole rocket vertically ---
-    // SVG bob is translateY(0 → -14 → 0). A sine of the 0..1 value gives
-    // a smooth ease-in-out matching CSS ease-in-out.
-    final bobOffset = -14.0 * math.sin(bob * math.pi);
-    canvas.translate(0, bobOffset);
-
-    // --- Flame flicker ---
-    // CSS keyframes: scaleY 1→1.18→0.85→1.22→0.95, scaleX 1→0.92→1.05→0.88→1,
-    // opacity 0.95→1→0.85→1→0.9. We approximate the 5-stop loop with the
-    // 0..1 value of a reverse-repeating controller mapped through sine.
-    final f = flame; // 0..1, ping-pongs
-    final flameScaleY = 1.0 + 0.18 * math.sin(f * 2 * math.pi);
-    final flameScaleX = 1.0 - 0.10 * math.sin(f * 2 * math.pi);
-    final flameOpacity = 0.85 + 0.15 * ((math.sin(f * 2 * math.pi) + 1) / 2);
-
-    // Flame pivot is the SVG transform-origin (200, 245).
-    _drawFlame(canvas, flameScaleX, flameScaleY, flameOpacity);
-
-    // --- Fins ---
-    _drawPolygon(
-      canvas,
-      const [Offset(156, 206), Offset(85, 250), Offset(130, 276)],
-      fill: _fin,
-      stroke: _hullStroke,
-      strokeWidth: 10,
-    );
-    _drawPolygon(
-      canvas,
-      const [Offset(244, 206), Offset(315, 250), Offset(270, 276)],
-      fill: _fin,
-      stroke: _hullStroke,
-      strokeWidth: 10,
-    );
-
-    // --- Main hull ---
-    _drawPolygon(
-      canvas,
-      const [Offset(200, 75), Offset(135, 270), Offset(200, 245), Offset(265, 270)],
-      fill: _hull,
-      stroke: _hullStroke,
-      strokeWidth: 12,
-    );
-
-    // --- Cockpit window (pulses color) ---
-    final windowColor = Color.lerp(_window, _windowBright, bob)!;
-    final windowPaint = Paint()..color = windowColor;
-    final windowStroke = Paint()
-      ..color = _hullStroke
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6;
-    canvas.drawCircle(const Offset(200, 155), 14, windowPaint);
-    canvas.drawCircle(const Offset(200, 155), 14, windowStroke);
-
-    canvas.restore();
-  }
-
-  void _drawFlame(
-    Canvas canvas,
-    double scaleX,
-    double scaleY,
-    double opacity,
-  ) {
-    // Transform-origin in SVG is (200, 245).
-    canvas.save();
-    canvas.translate(200, 245);
-    canvas.scale(scaleX, scaleY);
-    canvas.translate(-200, -245);
-
-    final outer = Paint()..color = _flameOuter.withValues(alpha: opacity);
-    final inner = Paint()..color = _flameInner.withValues(alpha: opacity);
-
-    // Outer flame: (175,255) (200,245) (200,335)
-    canvas.drawPath(
-      _path(const [Offset(175, 255), Offset(200, 245), Offset(200, 335)]),
-      outer,
-    );
-    // Inner flame: (200,245) (225,255) (200,335)
-    canvas.drawPath(
-      _path(const [Offset(200, 245), Offset(225, 255), Offset(200, 335)]),
-      inner,
-    );
-
-    canvas.restore();
-  }
-
-  Path _path(List<Offset> pts) {
-    final p = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (var i = 1; i < pts.length; i++) {
-      p.lineTo(pts[i].dx, pts[i].dy);
-    }
-    return p..close();
-  }
-
-  void _drawPolygon(
-    Canvas canvas,
-    List<Offset> pts, {
-    required Color fill,
-    required Color stroke,
-    required double strokeWidth,
-  }) {
-    final p = _path(pts);
-    canvas.drawPath(p, Paint()..color = fill);
-    canvas.drawPath(
-      p,
-      Paint()
-        ..color = stroke
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeJoin = StrokeJoin.miter,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RocketPainter old) =>
-      old.bob != bob || old.flame != flame;
 }
