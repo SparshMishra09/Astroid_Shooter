@@ -1,162 +1,122 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
   <defs>
-    <!-- Deep space background gradient -->
-    <radialGradient id="bgGrad" cx="50%" cy="38%" r="65%">
-      <stop offset="0%" stop-color="#1a1a4e"/>
-      <stop offset="45%" stop-color="#0a0a2e"/>
-      <stop offset="100%" stop-color="#030314"/>
-    </radialGradient>
-
-    <!-- Ship body gradient -->
-    <linearGradient id="shipBody" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#6a9fff"/>
-      <stop offset="50%" stop-color="#4a7aff"/>
-      <stop offset="100%" stop-color="#2c5fbd"/>
+    <!-- Epic Deep Space Gradient -->
+    <linearGradient id="spaceBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f1c"/>
+      <stop offset="100%" stop-color="#1a2442"/>
     </linearGradient>
 
-    <!-- Ship wing gradient -->
-    <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#5dade2"/>
-      <stop offset="100%" stop-color="#2c3e50"/>
+    <!-- Laser Beam Gradient -->
+    <linearGradient id="laserGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00ffff"/>
+      <stop offset="100%" stop-color="#0082df"/>
     </linearGradient>
 
-    <!-- Engine flame gradient -->
-    <linearGradient id="flameGrad" x1="50%" y1="0%" x2="50%" y2="100%">
-      <stop offset="0%" stop-color="#ffe066"/>
-      <stop offset="40%" stop-color="#ff8c00"/>
-      <stop offset="100%" stop-color="#e74c3c" stop-opacity="0.3"/>
-    </linearGradient>
-
-    <!-- Cockpit glass gradient -->
-    <radialGradient id="cockpit" cx="40%" cy="35%" r="65%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="60%" stop-color="#c8e6ff"/>
-      <stop offset="100%" stop-color="#5dade2"/>
-    </radialGradient>
-
-    <!-- Glow filter for the ship -->
-    <filter id="shipGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
+    <!-- Laser Glow Filter -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
       <feMerge>
-        <feMergeNode in="blur"/>
+        <feMergeNode in="coloredBlur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-
-    <!-- Engine glow filter -->
-    <filter id="engineGlow" x="-50%" y="-20%" width="200%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <!-- Nebula glow -->
-    <radialGradient id="nebula1" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#4a3aff" stop-opacity="0.25"/>
-      <stop offset="100%" stop-color="#4a3aff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="nebula2" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ff4a8a" stop-opacity="0.15"/>
-      <stop offset="100%" stop-color="#ff4a8a" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="nebula3" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
-    </radialGradient>
-
-    <!-- Rounded square clip for app icon -->
-    <clipPath id="iconClip">
-      <rect x="0" y="0" width="512" height="512" rx="96" ry="96"/>
-    </clipPath>
   </defs>
 
-  <!-- Rounded square background (app icon shape) -->
-  <g clip-path="url(#iconClip)">
-    <rect x="0" y="0" width="512" height="512" fill="url(#bgGrad)"/>
+  <!-- App Icon Base (Rounded Rectangle) -->
+  <rect width="400" height="400" rx="60" fill="url(#spaceBg)" stroke="#2b3a4a" stroke-width="8"/>
 
-    <!-- Nebula clouds -->
-    <ellipse cx="130" cy="150" rx="120" ry="100" fill="url(#nebula1)"/>
-    <ellipse cx="400" cy="380" rx="140" ry="110" fill="url(#nebula2)"/>
-    <ellipse cx="380" cy="120" rx="90" ry="80" fill="url(#nebula3)"/>
+  <!-- Distant Stars -->
+  <circle cx="80" cy="100" r="2.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="320" cy="80" r="1.5" fill="#ffffff" opacity="0.4"/>
+  <circle cx="350" cy="300" r="3" fill="#ffffff" opacity="0.7"/>
+  <circle cx="60" cy="280" r="1.5" fill="#ffffff" opacity="0.5"/>
+  <circle cx="200" cy="40" r="1" fill="#ffffff" opacity="0.3"/>
+  <circle cx="120" cy="180" r="2" fill="#ffffff" opacity="0.2"/>
+  <circle cx="280" cy="340" r="1.5" fill="#ffffff" opacity="0.6"/>
 
-    <!-- Stars (small dots scattered around) -->
-    <circle cx="80" cy="80" r="2.5" fill="#ffffff" opacity="0.9"/>
-    <circle cx="430" cy="60" r="2" fill="#ffffff" opacity="0.7"/>
-    <circle cx="100" cy="250" r="1.5" fill="#ffffff" opacity="0.6"/>
-    <circle cx="450" cy="200" r="3" fill="#ffffff" opacity="0.85"/>
-    <circle cx="60" cy="400" r="2" fill="#ffffff" opacity="0.7"/>
-    <circle cx="380" cy="450" r="2.5" fill="#ffffff" opacity="0.8"/>
-    <circle cx="200" cy="70" r="1.5" fill="#ffffff" opacity="0.5"/>
-    <circle cx="470" cy="300" r="1.5" fill="#ffffff" opacity="0.6"/>
-    <circle cx="40" cy="320" r="2" fill="#00d4ff" opacity="0.5"/>
-    <circle cx="470" cy="130" r="2" fill="#ffe066" opacity="0.4"/>
-    <circle cx="150" cy="460" r="1.5" fill="#ffffff" opacity="0.5"/>
-    <circle cx="320" cy="40" r="1" fill="#ffffff" opacity="0.4"/>
+  <!-- Speed/Motion Lines -->
+  <line x1="40" y1="120" x2="40" y2="240" stroke="#ffffff" stroke-width="2" opacity="0.15" stroke-linecap="round"/>
+  <line x1="360" y1="150" x2="360" y2="280" stroke="#ffffff" stroke-width="3" opacity="0.1" stroke-linecap="round"/>
+  <line x1="90" y1="300" x2="90" y2="370" stroke="#ffffff" stroke-width="2" opacity="0.2" stroke-linecap="round"/>
+  <line x1="310" y1="320" x2="310" y2="380" stroke="#ffffff" stroke-width="2" opacity="0.15" stroke-linecap="round"/>
 
-    <!-- A small asteroid in the background -->
-    <g opacity="0.3" transform="translate(380, 160)">
-      <circle cx="0" cy="0" r="18" fill="#7B6753"/>
-      <circle cx="-5" cy="-4" r="5" fill="#5A4A3A"/>
-      <circle cx="6" cy="3" r="4" fill="#5A4A3A"/>
-      <circle cx="2" cy="-8" r="3" fill="#9E8870"/>
-    </g>
-    <g opacity="0.25" transform="translate(110, 380)">
-      <circle cx="0" cy="0" r="14" fill="#7B6753"/>
-      <circle cx="-3" cy="-3" r="4" fill="#5A4A3A"/>
-      <circle cx="5" cy="2" r="3" fill="#5A4A3A"/>
-    </g>
+  <!-- Wing Lasers (Adjusted to hit the new asteroid correctly) -->
+  <line x1="107" y1="240" x2="107" y2="40" stroke="url(#laserGlow)" stroke-width="6" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="293" y1="240" x2="293" y2="45" stroke="url(#laserGlow)" stroke-width="6" stroke-linecap="round" filter="url(#glow)"/>
 
-    <!-- === SPACESHIP (centered, pointing up) === -->
-    <g filter="url(#shipGlow)" transform="translate(256, 250)">
-      <!-- Engine flame (bottom) -->
-      <g filter="url(#engineGlow)">
-        <path d="M-14 38 L0 80 L14 38 Z" fill="url(#flameGrad)"/>
-        <path d="M-8 38 L0 60 L8 38 Z" fill="#ffe066" opacity="0.8"/>
-        <path d="M-4 38 L0 50 L4 38 Z" fill="#ffffff" opacity="0.6"/>
-      </g>
+  <!-- ========================================== -->
+  <!-- THE NEW AND IMPROVED ASTEROID              -->
+  <!-- ========================================== -->
+  <g transform="translate(0, -65)">
+    <!-- Main Craggy Asteroid Body -->
+    <path d="M 120,30 L 150,45 L 200,20 L 240,40 L 280,35 L 310,60 L 300,90 L 320,110 L 280,120 L 240,105 L 200,125 L 160,115 L 120,125 L 90,100 L 70,80 L 100,50 Z" fill="#697677" stroke="#2b3a4a" stroke-width="8" stroke-linejoin="round"/>
 
-      <!-- Left wing -->
-      <path d="M-18 -30 L-68 -10 L-55 35 L-12 15 Z"
-            fill="url(#wingGrad)" stroke="#1a2a3a" stroke-width="2"/>
-      <!-- Right wing -->
-      <path d="M18 -30 L68 -10 L55 35 L12 15 Z"
-            fill="url(#wingGrad)" stroke="#1a2a3a" stroke-width="2"/>
+    <!-- Craters (Darker) -->
+    <path d="M 130,70 L 140,55 L 160,65 L 155,85 L 135,80 Z" fill="#4a5556"/>
+    <path d="M 220,50 L 250,45 L 260,70 L 230,80 Z" fill="#4a5556"/>
+    <path d="M 180,85 L 200,80 L 210,100 L 185,110 Z" fill="#4a5556"/>
+    <path d="M 270,90 L 290,85 L 295,100 L 280,105 Z" fill="#4a5556"/>
+    <path d="M 90,70 L 105,65 L 110,80 L 95,85 Z" fill="#4a5556"/>
 
-      <!-- Wing tip lights -->
-      <circle cx="-62" cy="-6" r="4" fill="#00ff88" opacity="0.9"/>
-      <circle cx="62" cy="-6" r="4" fill="#ff4444" opacity="0.9"/>
+    <!-- Rock Highlights (Lighter) -->
+    <path d="M 120,30 L 150,45 L 200,20 L 180,45 Z" fill="#889798"/>
+    <path d="M 280,35 L 310,60 L 290,70 L 260,50 Z" fill="#889798"/>
+    <path d="M 100,50 L 130,55 L 110,70 Z" fill="#889798"/>
 
-      <!-- Main body -->
-      <path d="M0 -100 L30 -30 L24 35 L0 40 L-24 35 L-30 -30 Z"
-            fill="url(#shipBody)" stroke="#1a2a3a" stroke-width="2.5"/>
+    <!-- Surface Cracks -->
+    <path d="M 200,20 L 210,50 M 210,50 L 195,70 M 210,50 L 235,65 M 160,115 L 165,95 L 150,80 M 280,120 L 270,100 L 285,85" stroke="#4a5556" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
-      <!-- Body paneling line -->
-      <line x1="0" y1="-95" x2="0" y2="35" stroke="#2c5fbd" stroke-width="1" opacity="0.5"/>
-
-      <!-- Cockpit window -->
-      <ellipse cx="0" cy="-35" rx="12" ry="16"
-               fill="url(#cockpit)" stroke="#1a2a3a" stroke-width="2"/>
-      <!-- Cockpit shine -->
-      <ellipse cx="-4" cy="-40" rx="4" ry="6" fill="#ffffff" opacity="0.6"/>
-
-      <!-- Engine nacelles (bottom sides) -->
-      <rect x="-28" y="25" width="10" height="18" rx="3"
-            fill="#2c3e50" stroke="#1a2a3a" stroke-width="1"/>
-      <rect x="18" y="25" width="10" height="18" rx="3"
-            fill="#2c3e50" stroke="#1a2a3a" stroke-width="1"/>
-      <!-- Engine glow points -->
-      <circle cx="-23" cy="42" r="3.5" fill="#00d4ff" opacity="0.8"/>
-      <circle cx="23" cy="42" r="3.5" fill="#00d4ff" opacity="0.8"/>
+    <!-- Explosive Laser Impacts -->
+    <!-- Left Impact -->
+    <g transform="translate(107, 105)">
+      <circle cx="0" cy="0" r="14" fill="#00ffff" filter="url(#glow)" opacity="0.8"/>
+      <polygon points="0,-20 5,-5 20,0 5,5 0,20 -5,5 -20,0 -5,-5" fill="#ffffff"/>
+      <circle cx="-15" cy="-15" r="3" fill="#00ffff"/>
+      <circle cx="15" cy="-10" r="2" fill="#ffffff"/>
+      <circle cx="10" cy="15" r="4" fill="#00ffff"/>
     </g>
 
-    <!-- Foreground sparkles -->
-    <circle cx="256" cy="130" r="2" fill="#ffe066" opacity="0.6"/>
-    <circle cx="256" cy="420" r="1.5" fill="#ffffff" opacity="0.4"/>
+    <!-- Right Impact -->
+    <g transform="translate(293, 110)">
+      <circle cx="0" cy="0" r="14" fill="#00ffff" filter="url(#glow)" opacity="0.8"/>
+      <polygon points="0,-20 5,-5 20,0 5,5 0,20 -5,5 -20,0 -5,-5" fill="#ffffff"/>
+      <circle cx="-10" cy="15" r="3" fill="#00ffff"/>
+      <circle cx="15" cy="-15" r="4" fill="#ffffff"/>
+      <circle cx="20" cy="10" r="2" fill="#00ffff"/>
+    </g>
+
+    <!-- Asteroid Debris flying off -->
+    <!-- Left side Debris -->
+    <polygon points="65,115 75,105 85,125 70,135" fill="#697677" stroke="#2b3a4a" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="45,90 60,85 55,105" fill="#4a5556" stroke="#2b3a4a" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="80,145 90,140 95,155" fill="#889798" stroke="#2b3a4a" stroke-width="2" stroke-linejoin="round"/>
+
+    <!-- Right side Debris -->
+    <polygon points="325,130 340,120 350,140 330,145" fill="#697677" stroke="#2b3a4a" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="340,80 360,75 350,95" fill="#889798" stroke="#2b3a4a" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="310,155 320,150 325,165" fill="#4a5556" stroke="#2b3a4a" stroke-width="2" stroke-linejoin="round"/>
+
+    <!-- Center floating chunks -->
+    <polygon points="190,145 210,140 205,155" fill="#697677" stroke="#2b3a4a" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="230,140 245,135 240,150" fill="#4a5556" stroke="#2b3a4a" stroke-width="2" stroke-linejoin="round"/>
   </g>
 
-  <!-- Subtle border glow (inside the rounded square) -->
-  <rect x="2" y="2" width="508" height="508" rx="94" ry="94"
-        fill="none" stroke="#4a7aff" stroke-width="2" opacity="0.15"/>
+  <!-- ========================================== -->
+  <!-- YOUR EXACT SPACESHIP CODE                  -->
+  <!-- ========================================== -->
+
+  <!-- Exhaust Flame -->
+  <polygon points="175,255 200,245 200,335" fill="#f05041"/>
+  <polygon points="200,245 225,255 200,335" fill="#cb3122"/>
+
+  <!-- Side Panels (Fins) -->
+  <polygon points="156,206 85,250 130,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
+  <polygon points="244,206 315,250 270,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
+
+  <!-- Main Rocket Hull -->
+  <polygon points="200,75 135,270 200,245 265,270" fill="#5883ff" stroke="#2b3a4a" stroke-width="12" stroke-linejoin="miter"/>
+
+  <!-- Window -->
+  <circle cx="200" cy="155" r="14" fill="#f3f6fa" stroke="#2b3a4a" stroke-width="6"/>
+
 </svg>
