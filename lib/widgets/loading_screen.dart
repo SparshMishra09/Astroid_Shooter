@@ -4,16 +4,26 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 /// A themed loading screen showing an animated rocket.
 ///
-/// The rocket is a single static SVG rendered via [SvgPicture.string] with
-/// **explicit width/height** so it always renders at the exact size
-/// requested — regardless of parent constraints. This is the fix for the
-/// "half-cropped rocket" bug that occurred when the SVG was inside a
-/// `Stack(fit: StackFit.expand)` without explicit dimensions.
+/// This implementation is intentionally minimal to avoid any rendering
+/// quirks: a single SVG asset rendered via [SvgPicture.asset] inside a
+/// [SizedBox] with TIGHT constraints. The only animation is a gentle
+/// vertical bob applied to the whole rocket via [Transform.translate].
 ///
-/// Animations (driven by Flutter, since flutter_svg can't play CSS):
-///   • **rocketBob** — whole ship bobs ±14px vertically (1.8s, sine-eased)
-///   • **flameFlicker** — exhaust flame opacity flickers (~0.12s loop)
-///   • **windowPulse** — cockpit window opacity pulses (1.8s)
+/// Key design decisions that prevent clipping/cropping:
+///   • [SvgPicture.asset] (not `.string`) — the asset loader is the most
+///     battle-tested path in flutter_svg.
+///   • The SVG file has NO `width`/`height` XML attributes — only
+///     `viewBox`. This forces flutter_svg to use the Dart-side
+///     `width`/`height` parameters for sizing.
+///   • A [SizedBox] with explicit dimensions wraps the SVG, giving it
+///     TIGHT constraints. No `Stack`, no layered rendering, no loose
+///     constraints that could cause the SVG to render at its intrinsic
+///     400×400 size.
+///   • The [Container] has `width: double.infinity` + `height: double.infinity`
+///     to guarantee it fills the entire screen.
+///   • No [SafeArea] — the gradient extends edge-to-edge under the
+///     status bar, and the content is vertically centered so it never
+///     collides with system UI.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({
     super.key,
@@ -22,6 +32,8 @@ class LoadingScreen extends StatefulWidget {
   });
 
   final String message;
+
+  /// If non-null, the progress bar is determinate (0.0 → 1.0).
   final double? progress;
 
   @override
@@ -29,58 +41,33 @@ class LoadingScreen extends StatefulWidget {
 }
 
 class _LoadingScreenState extends State<LoadingScreen>
-    with TickerProviderStateMixin {
-  late final AnimationController _bobController;
-  late final AnimationController _flameController;
-
-  // The rocket render size in logical pixels.
-  static const _rocketSize = 180.0;
-
-  /// Complete static rocket SVG (flame + body + window) on a 400×400 canvas.
-  /// Rendered as a single picture so there are no Stack constraint issues.
-  static const _rocketSvg = '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
-  <polygon points="175,255 200,245 200,335" fill="#f05041"/>
-  <polygon points="200,245 225,255 200,335" fill="#cb3122"/>
-  <polygon points="156,206 85,250 130,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
-  <polygon points="244,206 315,250 270,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
-  <polygon points="200,75 135,270 200,245 265,270" fill="#5883ff" stroke="#2b3a4a" stroke-width="12" stroke-linejoin="miter"/>
-  <circle cx="200" cy="155" r="14" fill="#f3f6fa" stroke="#2b3a4a" stroke-width="6"/>
-</svg>''';
-
-  /// Flame-only SVG for the flicker overlay. Same 400×400 canvas so it
-  /// aligns perfectly with the body when stacked.
-  static const _flameSvg = '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
-  <polygon points="175,255 200,245 200,335" fill="#f05041"/>
-  <polygon points="200,245 225,255 200,335" fill="#cb3122"/>
-</svg>''';
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bob;
 
   @override
   void initState() {
     super.initState();
-    _bobController = AnimationController(
+    _bob = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _flameController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 120),
     )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _bobController.dispose();
-    _flameController.dispose();
+    _bob.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1222),
+      // No backgroundColor — the Container gradient covers everything.
       body: Container(
+        // Explicit infinite dimensions guarantee the gradient fills
+        // the entire screen on every device.
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -88,88 +75,64 @@ class _LoadingScreenState extends State<LoadingScreen>
             colors: [Color(0xFF0D1222), Color(0xFF1A2442)],
           ),
         ),
-        child: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ---- Animated rocket ----
-                // The bob is applied to a SizedBox that has a FIXED size.
-                // The SvgPicture inside gets explicit width/height so it
-                // can never be clipped by ambiguous parent constraints.
-                AnimatedBuilder(
-                  animation: _bobController,
-                  builder: (context, child) {
-                    // translateY(0 → -14 → 0) over 1.8s, ease-in-out.
-                    final bobY =
-                        -14.0 * math.sin(_bobController.value * math.pi);
-                    return Transform.translate(
-                      offset: Offset(0, bobY),
-                      child: child,
-                    );
-                  },
-                  child: SizedBox(
-                    width: _rocketSize,
-                    height: _rocketSize,
-                    child: Stack(
-                      // No StackFit.expand — each child gets explicit size.
-                      children: [
-                        // Flame layer (behind body) with flicker opacity.
-                        AnimatedBuilder(
-                          animation: _flameController,
-                          builder: (context, child) {
-                            final f = _flameController.value;
-                            final opacity =
-                                0.85 + 0.15 * ((math.sin(f * 2 * math.pi) + 1) / 2);
-                            return Opacity(opacity: opacity, child: child);
-                          },
-                          child: SvgPicture.string(
-                            _flameSvg,
-                            width: _rocketSize,
-                            height: _rocketSize,
-                          ),
-                        ),
-                        // Body layer (on top of flame).
-                        SvgPicture.string(
-                          _rocketSvg,
-                          width: _rocketSize,
-                          height: _rocketSize,
-                        ),
-                      ],
-                    ),
-                  ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // ---- Rocket with gentle bob ----
+            // The child is built once (not rebuilt per frame) and only
+            // the Transform is animated.
+            AnimatedBuilder(
+              animation: _bob,
+              builder: (context, child) {
+                // Smooth ease-in-out bob: 0 → -14px → 0 over 1.8s.
+                final dy = -14.0 * math.sin(_bob.value * math.pi);
+                return Transform.translate(
+                  offset: Offset(0, dy),
+                  child: child,
+                );
+              },
+              // SizedBox gives the SvgPicture TIGHT 180×180 constraints.
+              // The SVG file has no width/height XML attributes, so
+              // flutter_svg MUST use these dimensions.
+              child: SizedBox(
+                width: 180,
+                height: 180,
+                child: SvgPicture.asset(
+                  'assets/images/loading_rocket_clean.svg',
+                  fit: BoxFit.contain,
                 ),
-                const SizedBox(height: 36),
-                // ---- Caption ----
-                Text(
-                  widget.message,
-                  style: const TextStyle(
-                    color: Color(0xFF8FA3C8),
-                    fontSize: 14,
-                    letterSpacing: 6,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                // ---- Progress bar ----
-                SizedBox(
-                  width: 220,
-                  child: widget.progress != null
-                      ? LinearProgressIndicator(
-                          value: widget.progress!.clamp(0.0, 1.0),
-                          minHeight: 4,
-                          backgroundColor: const Color(0xFF1E2A44),
-                          color: const Color(0xFF5883FF),
-                        )
-                      : LinearProgressIndicator(
-                          minHeight: 4,
-                          backgroundColor: const Color(0xFF1E2A44),
-                          color: const Color(0xFF5883FF),
-                        ),
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(height: 40),
+            // ---- Caption ----
+            Text(
+              widget.message,
+              style: const TextStyle(
+                color: Color(0xFF8FA3C8),
+                fontSize: 14,
+                letterSpacing: 6,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // ---- Progress bar ----
+            SizedBox(
+              width: 220,
+              child: widget.progress != null
+                  ? LinearProgressIndicator(
+                      value: widget.progress!.clamp(0.0, 1.0),
+                      minHeight: 4,
+                      backgroundColor: const Color(0xFF1E2A44),
+                      color: const Color(0xFF5883FF),
+                    )
+                  : LinearProgressIndicator(
+                      minHeight: 4,
+                      backgroundColor: const Color(0xFF1E2A44),
+                      color: const Color(0xFF5883FF),
+                    ),
+            ),
+          ],
         ),
       ),
     );
