@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <style>
+    /* Gentle vertical hovering animation for loading screen */
+    @keyframes rocketBob {
+      0%, 100% {
+        transform: translateY(0px);
+      }
+      50% {
+        transform: translateY(-14px);
+      }
+    }
+
+    /* Fast thrust flickering for exhaust flame */
+    @keyframes flameFlicker {
+      0% {
+        transform: scaleY(1) scaleX(1);
+        opacity: 0.95;
+      }
+      25% {
+        transform: scaleY(1.18) scaleX(0.92);
+        opacity: 1;
+      }
+      50% {
+        transform: scaleY(0.85) scaleX(1.05);
+        opacity: 0.85;
+      }
+      75% {
+        transform: scaleY(1.22) scaleX(0.88);
+        opacity: 1;
+      }
+      100% {
+        transform: scaleY(0.95) scaleX(1);
+        opacity: 0.9;
+      }
+    }
+
+    /* Subtle pulsing window light */
+    @keyframes windowPulse {
+      0%, 100% {
+        fill: #f3f6fa;
+      }
+      50% {
+        fill: #ffffff;
+      }
+    }
+
+    .rocket-container {
+      animation: rocketBob 1.8s ease-in-out infinite;
+    }
+
+    .flame-anim {
+      animation: flameFlicker 0.12s ease-in-out infinite alternate;
+      transform-origin: 200px 245px;
+    }
+
+    .window-anim {
+      animation: windowPulse 1.8s ease-in-out infinite;
+    }
+  </style>
+
+  <rect width="400" height="400" fill="#0d1222"/>
+
+  <g class="rocket-container">
+
+    <g class="flame-anim">
+      <polygon points="175,255 200,245 200,335" fill="#f05041"/>
+      <polygon points="200,245 225,255 200,335" fill="#cb3122"/>
+    </g>
+
+    <polygon points="156,206 85,250 130,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
+    <polygon points="244,206 315,250 270,276" fill="#0082df" stroke="#2b3a4a" stroke-width="10" stroke-linejoin="miter"/>
+
+    <polygon points="200,75 135,270 200,245 265,270" fill="#5883ff" stroke="#2b3a4a" stroke-width="12" stroke-linejoin="miter"/>
+
+    <circle class="window-anim" cx="200" cy="155" r="14" fill="#f3f6fa" stroke="#2b3a4a" stroke-width="6"/>
+
+  </g>
+</svg>

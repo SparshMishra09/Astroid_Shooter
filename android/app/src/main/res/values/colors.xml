@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Deep-space background used by the native launch splash and the
+         NormalTheme window background. Keeps the app dark from the very
+         first frame (no white flash) on all Android versions. -->
+    <color name="launch_background_color">#FF0B0F1C</color>
+</resources>

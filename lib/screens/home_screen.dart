@@ -5,6 +5,7 @@ import '../models/user_progress.dart';
 import '../game/game_mode_registry.dart';
 import '../services/user_progress_service.dart';
 import '../auth/auth_service.dart';
+import '../widgets/loading_screen.dart';
 import 'game_screen.dart';
 import 'leaderboard_screen.dart';
 
@@ -115,6 +116,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // While the user's progress is being fetched from Firestore, show the
+    // themed loading screen rather than empty/placeholder stats.
+    if (_isLoading) {
+      return const LoadingScreen(message: 'LOADING PROFILE…');
+    }
+
     final modeName = gameModeConfigFor(GameMode.classicRun).displayName;
     final astrids = _progress?.astrids ?? 0;
     final highestWave = _progress?.highestWave ?? 0;
@@ -272,21 +279,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             icon: Icons.stars,
             iconColor: Colors.amber,
             label: 'ASTRIDS',
-            value: _isLoading ? '...' : '$astrids',
+            value: '$astrids',
           ),
           const SizedBox(width: 10),
           _buildStatCard(
             icon: Icons.waves,
             iconColor: Colors.orange,
             label: 'HIGHEST WAVE',
-            value: _isLoading ? '...' : '$highestWave',
+            value: '$highestWave',
           ),
           const SizedBox(width: 10),
           _buildStatCard(
             icon: Icons.whatshot,
             iconColor: Colors.red,
             label: 'DESTROYED',
-            value: _isLoading ? '...' : '$totalDestroyed',
+            value: '$totalDestroyed',
           ),
         ],
       ),
