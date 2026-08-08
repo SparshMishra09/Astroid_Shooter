@@ -1,0 +1,162 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Deep space background gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#1a1a4e"/>
+      <stop offset="45%" stop-color="#0a0a2e"/>
+      <stop offset="100%" stop-color="#030314"/>
+    </radialGradient>
+
+    <!-- Ship body gradient -->
+    <linearGradient id="shipBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6a9fff"/>
+      <stop offset="50%" stop-color="#4a7aff"/>
+      <stop offset="100%" stop-color="#2c5fbd"/>
+    </linearGradient>
+
+    <!-- Ship wing gradient -->
+    <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5dade2"/>
+      <stop offset="100%" stop-color="#2c3e50"/>
+    </linearGradient>
+
+    <!-- Engine flame gradient -->
+    <linearGradient id="flameGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffe066"/>
+      <stop offset="40%" stop-color="#ff8c00"/>
+      <stop offset="100%" stop-color="#e74c3c" stop-opacity="0.3"/>
+    </linearGradient>
+
+    <!-- Cockpit glass gradient -->
+    <radialGradient id="cockpit" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#c8e6ff"/>
+      <stop offset="100%" stop-color="#5dade2"/>
+    </radialGradient>
+
+    <!-- Glow filter for the ship -->
+    <filter id="shipGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Engine glow filter -->
+    <filter id="engineGlow" x="-50%" y="-20%" width="200%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Nebula glow -->
+    <radialGradient id="nebula1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4a3aff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#4a3aff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebula2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff4a8a" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#ff4a8a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebula3" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Rounded square clip for app icon -->
+    <clipPath id="iconClip">
+      <rect x="0" y="0" width="512" height="512" rx="96" ry="96"/>
+    </clipPath>
+  </defs>
+
+  <!-- Rounded square background (app icon shape) -->
+  <g clip-path="url(#iconClip)">
+    <rect x="0" y="0" width="512" height="512" fill="url(#bgGrad)"/>
+
+    <!-- Nebula clouds -->
+    <ellipse cx="130" cy="150" rx="120" ry="100" fill="url(#nebula1)"/>
+    <ellipse cx="400" cy="380" rx="140" ry="110" fill="url(#nebula2)"/>
+    <ellipse cx="380" cy="120" rx="90" ry="80" fill="url(#nebula3)"/>
+
+    <!-- Stars (small dots scattered around) -->
+    <circle cx="80" cy="80" r="2.5" fill="#ffffff" opacity="0.9"/>
+    <circle cx="430" cy="60" r="2" fill="#ffffff" opacity="0.7"/>
+    <circle cx="100" cy="250" r="1.5" fill="#ffffff" opacity="0.6"/>
+    <circle cx="450" cy="200" r="3" fill="#ffffff" opacity="0.85"/>
+    <circle cx="60" cy="400" r="2" fill="#ffffff" opacity="0.7"/>
+    <circle cx="380" cy="450" r="2.5" fill="#ffffff" opacity="0.8"/>
+    <circle cx="200" cy="70" r="1.5" fill="#ffffff" opacity="0.5"/>
+    <circle cx="470" cy="300" r="1.5" fill="#ffffff" opacity="0.6"/>
+    <circle cx="40" cy="320" r="2" fill="#00d4ff" opacity="0.5"/>
+    <circle cx="470" cy="130" r="2" fill="#ffe066" opacity="0.4"/>
+    <circle cx="150" cy="460" r="1.5" fill="#ffffff" opacity="0.5"/>
+    <circle cx="320" cy="40" r="1" fill="#ffffff" opacity="0.4"/>
+
+    <!-- A small asteroid in the background -->
+    <g opacity="0.3" transform="translate(380, 160)">
+      <circle cx="0" cy="0" r="18" fill="#7B6753"/>
+      <circle cx="-5" cy="-4" r="5" fill="#5A4A3A"/>
+      <circle cx="6" cy="3" r="4" fill="#5A4A3A"/>
+      <circle cx="2" cy="-8" r="3" fill="#9E8870"/>
+    </g>
+    <g opacity="0.25" transform="translate(110, 380)">
+      <circle cx="0" cy="0" r="14" fill="#7B6753"/>
+      <circle cx="-3" cy="-3" r="4" fill="#5A4A3A"/>
+      <circle cx="5" cy="2" r="3" fill="#5A4A3A"/>
+    </g>
+
+    <!-- === SPACESHIP (centered, pointing up) === -->
+    <g filter="url(#shipGlow)" transform="translate(256, 250)">
+      <!-- Engine flame (bottom) -->
+      <g filter="url(#engineGlow)">
+        <path d="M-14 38 L0 80 L14 38 Z" fill="url(#flameGrad)"/>
+        <path d="M-8 38 L0 60 L8 38 Z" fill="#ffe066" opacity="0.8"/>
+        <path d="M-4 38 L0 50 L4 38 Z" fill="#ffffff" opacity="0.6"/>
+      </g>
+
+      <!-- Left wing -->
+      <path d="M-18 -30 L-68 -10 L-55 35 L-12 15 Z"
+            fill="url(#wingGrad)" stroke="#1a2a3a" stroke-width="2"/>
+      <!-- Right wing -->
+      <path d="M18 -30 L68 -10 L55 35 L12 15 Z"
+            fill="url(#wingGrad)" stroke="#1a2a3a" stroke-width="2"/>
+
+      <!-- Wing tip lights -->
+      <circle cx="-62" cy="-6" r="4" fill="#00ff88" opacity="0.9"/>
+      <circle cx="62" cy="-6" r="4" fill="#ff4444" opacity="0.9"/>
+
+      <!-- Main body -->
+      <path d="M0 -100 L30 -30 L24 35 L0 40 L-24 35 L-30 -30 Z"
+            fill="url(#shipBody)" stroke="#1a2a3a" stroke-width="2.5"/>
+
+      <!-- Body paneling line -->
+      <line x1="0" y1="-95" x2="0" y2="35" stroke="#2c5fbd" stroke-width="1" opacity="0.5"/>
+
+      <!-- Cockpit window -->
+      <ellipse cx="0" cy="-35" rx="12" ry="16"
+               fill="url(#cockpit)" stroke="#1a2a3a" stroke-width="2"/>
+      <!-- Cockpit shine -->
+      <ellipse cx="-4" cy="-40" rx="4" ry="6" fill="#ffffff" opacity="0.6"/>
+
+      <!-- Engine nacelles (bottom sides) -->
+      <rect x="-28" y="25" width="10" height="18" rx="3"
+            fill="#2c3e50" stroke="#1a2a3a" stroke-width="1"/>
+      <rect x="18" y="25" width="10" height="18" rx="3"
+            fill="#2c3e50" stroke="#1a2a3a" stroke-width="1"/>
+      <!-- Engine glow points -->
+      <circle cx="-23" cy="42" r="3.5" fill="#00d4ff" opacity="0.8"/>
+      <circle cx="23" cy="42" r="3.5" fill="#00d4ff" opacity="0.8"/>
+    </g>
+
+    <!-- Foreground sparkles -->
+    <circle cx="256" cy="130" r="2" fill="#ffe066" opacity="0.6"/>
+    <circle cx="256" cy="420" r="1.5" fill="#ffffff" opacity="0.4"/>
+  </g>
+
+  <!-- Subtle border glow (inside the rounded square) -->
+  <rect x="2" y="2" width="508" height="508" rx="94" ry="94"
+        fill="none" stroke="#4a7aff" stroke-width="2" opacity="0.15"/>
+</svg>
