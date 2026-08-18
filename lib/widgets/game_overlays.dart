@@ -64,7 +64,7 @@ class GameHUD extends StatelessWidget {
                     border: Border.all(color: Colors.white, width: 2),
                   ),
                   child: Text(
-                    '${mode.displayName} · Wave ${gameState.currentWave}',
+                    '${mode.displayName} · ${mode.waveLabel} ${gameState.currentWave}',
                     style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -88,8 +88,9 @@ class GameHUD extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Wave progress
-                if (!gameState.isWaveBreak)
+                // Wave progress (meaningless in boss-counter modes like
+                // Boss Rush, where the stage advances on a boss kill)
+                if (mode.wavesEnabled && !gameState.isWaveBreak)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: Column(
@@ -249,7 +250,7 @@ class WaveStartNotification extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('WAVE ${gameState.currentWave}',
+            Text('${mode.waveLabel.toUpperCase()} ${gameState.currentWave}',
                 style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(
@@ -420,6 +421,7 @@ class GameOverOverlay extends StatelessWidget {
     required this.isSaving,
     required this.onRestart,
     required this.onMainMenu,
+    this.waveLabel = 'Wave',
   });
 
   final GameState gameState;
@@ -427,6 +429,9 @@ class GameOverOverlay extends StatelessWidget {
   final bool isSaving;
   final VoidCallback onRestart;
   final VoidCallback onMainMenu;
+
+  /// Stage label ("Wave" or "Boss") — shown over the current-stage stat.
+  final String waveLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -504,7 +509,7 @@ class GameOverOverlay extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   _StatBox(
-                    label: 'WAVE',
+                    label: waveLabel.toUpperCase(),
                     value: '${gameState.currentWave}',
                     icon: Icons.waves,
                     color: Colors.orange,

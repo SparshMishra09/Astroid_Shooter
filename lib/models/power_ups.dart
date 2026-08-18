@@ -55,10 +55,30 @@ class PowerUp extends GameObject {
     }
   }
 
+  /// Uniformly random power-up — the classic drop behavior.
   static PowerUp random(double x, double y) {
     final random = Random();
     final types = PowerUpType.values;
     final type = types[random.nextInt(types.length)];
+    return PowerUp(x: x, y: y, type: type);
+  }
+
+  /// Random power-up drawn from a weighted distribution. Modes use this
+  /// to make specific abilities rarer (e.g. Boss Rush dampens the laser
+  /// so it can't trivialize boss fights). [weights] maps each type to a
+  /// relative chance; a uniform map produces the same odds as [random].
+  static PowerUp randomWeighted(double x, double y, Map<PowerUpType, double> weights) {
+    final random = Random();
+    final total = weights.values.fold<double>(0, (a, b) => a + b);
+    var roll = random.nextDouble() * total;
+    PowerUpType type = PowerUpType.values.last;
+    for (final entry in weights.entries) {
+      roll -= entry.value;
+      if (roll <= 0) {
+        type = entry.key;
+        break;
+      }
+    }
     return PowerUp(x: x, y: y, type: type);
   }
 }

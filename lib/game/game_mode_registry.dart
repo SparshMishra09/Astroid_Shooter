@@ -1,6 +1,7 @@
 import '../models/enums.dart';
 import 'game_mode.dart';
 import 'classic_run_mode.dart';
+import 'boss_rush_mode.dart';
 
 /// Look up the [GameModeConfig] implementation for a [GameMode].
 ///
@@ -10,5 +11,7 @@ GameModeConfig gameModeConfigFor(GameMode mode) {
   switch (mode) {
     case GameMode.classicRun:
       return ClassicRunMode();
+    case GameMode.bossRush:
+      return BossRushMode();
   }
 }

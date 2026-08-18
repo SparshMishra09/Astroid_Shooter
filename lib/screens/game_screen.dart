@@ -383,10 +383,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               // Pause button
               PauseButton(isPaused: c.gameState.isPaused, onPressed: _togglePause),
 
-              // Wave notifications
-              if (c.gameState.showWaveStart)
+              // Wave notifications (wave-based modes only; Boss Rush's
+              // stage banner comes from the boss spawn announcement)
+              if (c.config.wavesEnabled && c.gameState.showWaveStart)
                 WaveStartNotification(gameState: c.gameState, mode: c.config),
-              if (c.gameState.showWaveComplete)
+              if (c.config.wavesEnabled && c.gameState.showWaveComplete)
                 WaveCompleteNotification(gameState: c.gameState),
 
               // Overlays
@@ -397,6 +398,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   isSaving: _isSavingResults,
                   onRestart: _restartGame,
                   onMainMenu: _goToMainMenu,
+                  waveLabel: c.config.waveLabel,
                 ),
               if (c.gameState.isPaused)
                 PauseOverlay(

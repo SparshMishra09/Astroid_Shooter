@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../models/enums.dart';
 import '../models/user_progress.dart';
-import '../game/game_mode_registry.dart';
 import '../services/user_progress_service.dart';
 import '../auth/auth_service.dart';
 import '../widgets/loading_screen.dart';
-import 'game_screen.dart';
+import 'mode_selection_screen.dart';
 import 'leaderboard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -76,9 +74,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _startGame(GameMode gameMode) {
+  void _openModeSelection() {
     Navigator.of(context)
-        .push(MaterialPageRoute(builder: (context) => GameScreen(gameMode: gameMode)))
+        .push(MaterialPageRoute(builder: (context) => const ModeSelectionScreen()))
         .then((_) => _loadProgress()); // Refresh stats after returning from game
   }
 
@@ -122,7 +120,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return const LoadingScreen(message: 'LOADING PROFILE…');
     }
 
-    final modeName = gameModeConfigFor(GameMode.classicRun).displayName;
     final astrids = _progress?.astrids ?? 0;
     final highestWave = _progress?.highestWave ?? 0;
     final totalDestroyed = _progress?.totalAsteroidsDestroyed ?? 0;
@@ -194,16 +191,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                       // Leaderboard Button
                       _buildLeaderboardButton(),
-                      const SizedBox(height: 12),
-
-                      // Mode label
-                      Text(
-                        'Mode: $modeName',
-                        style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontStyle: FontStyle.italic),
-                      ),
                       const SizedBox(height: 20),
 
                       // Instructions
@@ -359,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(30),
-          onTap: () => _startGame(GameMode.classicRun),
+          onTap: _openModeSelection,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 16),
             child: const Text(
@@ -442,7 +429,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             '• Survive waves to earn bonus astrids\n'
             '• Collect power-ups: Rapid Fire, Triple Shot, Laser, Shield\n'
             '• Build combos for bonus astrids\n'
-            '• Face the boss dreadnought every 150 kills!\n\n'
+            '• Face boss dreadnoughts — every 150 kills, or one after\n'
+            '  another in Boss Rush mode!\n\n'
             'Astrids are saved to your account — spend them in the shop (coming soon!)',
             style: TextStyle(color: Colors.white70, fontSize: 13),
           ),

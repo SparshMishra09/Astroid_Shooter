@@ -41,6 +41,32 @@ class GameConfig {
   // --- Boss ---
   static const int bossKillThreshold = 150; // boss every 150 destroyed
 
+  // --- Boss Rush mode ---
+  static const int bossRushRespawnDelay = 600; // 10s between bosses
+  static const int bossRushInitialDelay = 180; // 3s before first boss
+  static const int bossRushPowerUpBaseInterval = 600; // 10s base
+  static const int bossRushPowerUpMinInterval = 300; // 5s floor
+  static const int bossRushPowerUpWaveStep = 15; // faster per boss defeated
+
+  // --- Boss variant attack intervals (frames @ 60fps) ---
+  static const int rapidFireBossShootInterval = 12; // ~5 shots/sec
+  static const int pentaBeamBossShootInterval = 75; // 1.25s
+  static const int marksmanBossShootInterval = 90; // 1.5s
+  static const int marksmanMinionCount = 3; // escorts spawned with boss
+
+  // --- Boss variant movement ---
+  static const double triBeamBossSpeed = 2.0;
+  static const double rapidFireBossSpeed = 3.0;
+  static const double pentaBeamBossSpeed = 1.8;
+  static const double marksmanBossSpeed = 2.2;
+
+  // --- Boss Rush power-up weighting ---
+  // Laser weight relative to 1.0 for each other ability. With the other
+  // three at 1.0, 0.33 gives the laser ~10% of drops (vs 25% uniform) —
+  // rare enough that it can't carry every boss fight, common enough
+  // that landing one feels like a jackpot.
+  static const double bossRushLaserPowerUpWeight = 0.33;
+
   // --- Power-up drop ---
   static const double powerUpDropChance = 0.05; // 5%
   static const double waveBreakBonusDropChance = 0.20; // 20%

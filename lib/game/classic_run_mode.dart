@@ -1,18 +1,51 @@
 import 'dart:math';
 import 'game_mode.dart';
 import '../models/enums.dart';
+import '../models/boss.dart';
 import '../models/game_state.dart';
 import '../models/power_ups.dart';
 import '../config/game_config.dart';
 
 /// The classic endless run: waves that grow harder, full power-up suite,
 /// periodic boss dreadnought. This is the original game's behavior.
-class ClassicRunMode implements GameModeConfig {
+///
+/// Extends (not implements) the interface so uniform power-up drop
+/// weights are inherited unchanged — every ability stays at 25%.
+class ClassicRunMode extends GameModeConfig {
   @override
   String get displayName => 'Classic Run';
 
   @override
   bool get powerUpsEnabled => true;
+
+  @override
+  bool get asteroidsEnabled => true;
+
+  @override
+  bool get specialEnemiesEnabled => true;
+
+  @override
+  bool get wavesEnabled => true;
+
+  @override
+  String get waveLabel => 'Wave';
+
+  @override
+  int get bossRespawnDelay => 0;
+
+  @override
+  int get initialBossDelay => 0;
+
+  @override
+  bool get randomPowerUpsEnabled => false;
+
+  @override
+  int getPowerUpSpawnInterval(GameState state) => 1 << 30; // unused
+
+  @override
+  Boss createBoss(int bossesDefeated, double screenWidth, double bossSize) {
+    return Boss.create(screenWidth, bossSize);
+  }
 
   @override
   int getShotInterval(GameState state, Map<PowerUpType, ActivePowerUp> active) {

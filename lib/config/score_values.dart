@@ -7,4 +7,10 @@ class ScoreValues {
   static const int hugeSlowAsteroid = 30;
   static const int enemyShip = 40;
   static const int boss = 200;
+
+  // --- Boss Rush variants ---
+  static const int bossTriBeam = 200;
+  static const int bossRapidFire = 300;
+  static const int bossPentaBeam = 400;
+  static const int bossMarksman = 500;
 }

@@ -110,6 +110,15 @@ class GameController {
   bool hasShield = false;
   int shieldHitsRemaining = 0;
 
+  // --- Boss sequencing (Boss Rush relies on these; classic ignores) ---
+  /// How many bosses have been defeated this run.
+  int bossesDefeated = 0;
+
+  /// Frames remaining before the next boss may spawn. Set after each
+  /// defeat from `config.bossRespawnDelay` (10s in Boss Rush, 0 in
+  /// classic where the kill threshold gates spawns instead).
+  int bossRespawnCooldown = 0;
+
   // --- Combo flash tracking (UI reads these) ---
   double? previousComboMultiplier;
   int comboFlashTimer = 0;
@@ -163,6 +172,8 @@ class GameController {
     backgroundScrollOffset = 0;
     previousComboMultiplier = null;
     comboFlashTimer = 0;
+    bossesDefeated = 0;
+    bossRespawnCooldown = config.initialBossDelay;
   }
 
   void setScreenSize(double width, double height) {
@@ -188,7 +199,12 @@ class GameController {
 
     frameCount++;
     backgroundScrollOffset += 2.0;
-    gameState.updateWaveSystem();
+
+    // The timed wave system only runs in wave-based modes; Boss Rush
+    // replaces waves with a boss counter (no breaks, no wave bonuses).
+    if (config.wavesEnabled) {
+      gameState.updateWaveSystem();
+    }
 
     // Auto-shoot (always, even during wave breaks)
     final currentInterval = config.getShotInterval(gameState, activePowerUps);
@@ -198,11 +214,22 @@ class GameController {
     }
 
     if (!gameState.isWaveBreak) {
-      // Spawn normal asteroids
-      final waveSpawnRate = config.getAsteroidSpawnRate(gameState);
-      if (frameCount % waveSpawnRate == 0) {
-        asteroids.add(Asteroid.random(screenWidth, asteroidSize));
+      // Spawn normal asteroids (disabled in Boss Rush — bosses only)
+      if (config.asteroidsEnabled) {
+        final waveSpawnRate = config.getAsteroidSpawnRate(gameState);
+        if (frameCount % waveSpawnRate == 0) {
+          asteroids.add(Asteroid.random(screenWidth, asteroidSize));
+        }
       }
+
+      // Timed random power-up drops (Boss Rush has no asteroids to
+      // drop them, so abilities arrive on a random schedule instead).
+      if (config.randomPowerUpsEnabled &&
+          frameCount % config.getPowerUpSpawnInterval(gameState) == 0) {
+        final px = Random().nextDouble() * (screenWidth - GameConfig.powerUpSize);
+        powerUps.add(PowerUp.randomWeighted(px, -GameConfig.powerUpSize, config.powerUpWeights));
+      }
+
       updatePowerUps();
       updateEnemies();
       spawnEnemies();
@@ -333,7 +360,7 @@ class GameController {
     if (activeBoss != null) {
       activeBoss!.update(screenHeight, screenWidth);
       if (activeBoss!.shouldShoot()) {
-        fireBossSpread();
+        fireBossAttack();
       }
     }
   }
@@ -348,13 +375,36 @@ class GameController {
     ));
   }
 
-  void fireBossSpread() {
+  /// Bottom-center of the boss hull — where its shots originate.
+  double get _bossMuzzleX => activeBoss!.x + activeBoss!.width / 2;
+  double get _bossMuzzleY => activeBoss!.y + activeBoss!.height;
+
+  /// Dispatch the active boss's attack pattern by variant.
+  void fireBossAttack() {
     if (activeBoss == null) return;
+    switch (activeBoss!.bossType) {
+      case BossType.triBeam:
+        _fireTriBeam();
+        break;
+      case BossType.rapidFire:
+        _fireRapidShot();
+        break;
+      case BossType.pentaBeam:
+        _firePentaBeam();
+        break;
+      case BossType.marksman:
+        _fireAimedShot();
+        break;
+    }
+  }
+
+  /// 3-way spread — the original dreadnought pattern.
+  void _fireTriBeam() {
     for (int i = -1; i <= 1; i++) {
       final angle = i * 20 * (pi / 180);
       enemyBullets.add(EnemyBullet(
-        x: activeBoss!.x + activeBoss!.width / 2 - 5,
-        y: activeBoss!.y + activeBoss!.height,
+        x: _bossMuzzleX - 5,
+        y: _bossMuzzleY,
         width: 10,
         height: 15,
         speedY: cos(angle) * GameConfig.bossBulletSpeed,
@@ -363,13 +413,65 @@ class GameController {
     }
   }
 
+  /// 5-way spread from the penta-beam variant.
+  void _firePentaBeam() {
+    for (int i = -2; i <= 2; i++) {
+      final angle = i * 18 * (pi / 180);
+      enemyBullets.add(EnemyBullet(
+        x: _bossMuzzleX - 5,
+        y: _bossMuzzleY,
+        width: 10,
+        height: 15,
+        speedY: cos(angle) * GameConfig.bossBulletSpeed,
+        speedX: sin(angle) * GameConfig.bossBulletSpeed,
+      ));
+    }
+  }
+
+  /// Single fast bullet straight down — the rapid-fire hose compensates
+  /// volume with a higher speed so it can't be ignored.
+  void _fireRapidShot() {
+    enemyBullets.add(EnemyBullet(
+      x: _bossMuzzleX - 5,
+      y: _bossMuzzleY,
+      width: 10,
+      height: 15,
+      speedY: GameConfig.bossBulletSpeed * 1.3,
+    ));
+  }
+
+  /// Single shot aimed directly at the player — the escort carrier's
+  /// precision attack (its minions supply the spread pressure).
+  void _fireAimedShot() {
+    final dx = (player.x + player.width / 2) - _bossMuzzleX;
+    final dy = (player.y + player.height / 2) - _bossMuzzleY;
+    final len = sqrt(dx * dx + dy * dy);
+    if (len < 1) return; // avoid division by ~0 when overlapping
+    enemyBullets.add(EnemyBullet(
+      x: _bossMuzzleX - 5,
+      y: _bossMuzzleY,
+      width: 10,
+      height: 15,
+      speedY: (dy / len) * GameConfig.bossBulletSpeed,
+      speedX: (dx / len) * GameConfig.bossBulletSpeed,
+    ));
+  }
+
   void spawnEnemies() {
-    // Boss spawn check
-    if (config.shouldSpawnBoss(gameState, asteroidsDestroyed) && activeBoss == null) {
-      spawnBoss();
-      return;
+    // --- Boss spawn check (with per-mode respawn cooldown) ---
+    if (activeBoss == null) {
+      if (bossRespawnCooldown > 0) {
+        bossRespawnCooldown--;
+      } else if (config.shouldSpawnBoss(gameState, asteroidsDestroyed)) {
+        spawnBoss();
+        return;
+      }
     }
     if (activeBoss != null) return; // pause other enemy spawns during boss
+
+    // Probability-table enemies (disabled in Boss Rush — its only
+    // minions are the escort carrier's, spawned directly in spawnBoss).
+    if (!config.specialEnemiesEnabled) return;
 
     final waveSpawnInterval = config.getEnemySpawnInterval(gameState);
     if (frameCount % waveSpawnInterval != 0) return;
@@ -389,15 +491,38 @@ class GameController {
   }
 
   void spawnBoss() {
-    activeBoss = Boss.create(screenWidth, GameConfig.bossSize);
+    // The mode decides which boss spawns (classic: the original tri-beam
+    // dreadnought; Boss Rush: a random variant).
+    activeBoss = config.createBoss(bossesDefeated, screenWidth, GameConfig.bossSize);
+
+    // In Boss Rush the boss counter replaces the wave number, so the HUD
+    // badge reads "Boss Rush · Boss N".
+    if (!config.wavesEnabled) {
+      gameState.currentWave = bossesDefeated + 1;
+    }
+
+    // Classic keeps its original announcement; Boss Rush names the variant.
+    final announce = config.wavesEnabled
+        ? 'BOSS INCOMING!'
+        : '${activeBoss!.displayName}!';
     floatingTexts.add(FloatingText(
-      text: 'BOSS INCOMING!',
-      x: screenWidth / 2 - 60,
+      text: announce,
+      x: screenWidth / 2 - 100,
       y: screenHeight / 2,
       color: Colors.red,
       lifeTimer: 180,
       fontSize: 22,
     ));
+
+    // The escort carrier (marksman) arrives with 3 enemy-fighter
+    // minions that each fire single shots — the same fighters players
+    // face in Classic Run.
+    if (activeBoss!.bossType == BossType.marksman) {
+      for (int i = 0; i < GameConfig.marksmanMinionCount; i++) {
+        enemies.add(EnemyShip.random(screenWidth, GameConfig.enemyShipSize));
+      }
+    }
+
     asteroidsDestroyed = 0;
     callbacks.onBossIncoming();
   }
@@ -406,6 +531,8 @@ class GameController {
     if (activeBoss == null) return;
 
     gameState.score += activeBoss!.scoreValue;
+    bossesDefeated++;
+    bossRespawnCooldown = config.bossRespawnDelay;
 
     // Big death explosion + shake
     explosionEffects.add(ExplosionEffect(
@@ -418,9 +545,10 @@ class GameController {
 
     // Drop power-ups
     for (int i = 0; i < GameConfig.bossPowerUpDropCount; i++) {
-      powerUps.add(PowerUp.random(
+      powerUps.add(PowerUp.randomWeighted(
         activeBoss!.x + activeBoss!.width / 2 + (i * 30 - 15),
         activeBoss!.y + activeBoss!.height / 2,
+        config.powerUpWeights,
       ));
     }
 
@@ -490,16 +618,17 @@ class GameController {
     if (!config.powerUpsEnabled) return;
     final random = Random();
     if (random.nextDouble() < GameConfig.powerUpDropChance) {
-      powerUps.add(PowerUp.random(x, y));
+      powerUps.add(PowerUp.randomWeighted(x, y, config.powerUpWeights));
     }
   }
 
   void _maybeDropWaveBreakBonus() {
     final random = Random();
     if (random.nextDouble() < GameConfig.waveBreakBonusDropChance) {
-      powerUps.add(PowerUp.random(
+      powerUps.add(PowerUp.randomWeighted(
         screenWidth / 2 - GameConfig.powerUpSize / 2,
         screenHeight / 2 - 100,
+        config.powerUpWeights,
       ));
       floatingTexts.add(FloatingText(
         text: 'Bonus Power-Up!',
