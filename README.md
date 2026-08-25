@@ -139,11 +139,35 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 
 ## 📸 Screenshots
 
-> *Screenshots coming soon — the game is fully playable. Install the APK to see it in action.*
+<p align="center">
+  <img src="docs/screenshots/home-screen.png" width="240" alt="Home Screen" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/mode-selection.png" width="240" alt="Mode Selection" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/leaderboard.png" width="240" alt="Leaderboard" />
+</p>
 
-| Auth Screen | Home Screen | In-Game | Leaderboard |
-|-------------|-------------|---------|-------------|
-| Space-themed login/signup with animated starfield and glowing tab bar | Stats cards, play button, leaderboard access | HUD with astrids, wave badge, lives, power-ups, combo | Real-time rankings with three sort categories |
+<p align="center">
+  <img src="docs/screenshots/classic-run-gameplay.png" width="240" alt="Classic Run Gameplay" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/boss-fight.png" width="240" alt="Boss Fight" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/boss-incoming.png" width="240" alt="Boss Incoming" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/triple-shot-shield.png" width="240" alt="Triple Shot & Shield Power-ups" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/laser-beam-powerup.png" width="240" alt="Laser Beam Power-up" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/powerup-drop.png" width="240" alt="Power-up Drop" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/boss-rush-laser.png" width="240" alt="Boss Rush Mode" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/game-over.png" width="240" alt="Game Over" />
+</p>
 
 ---
 
