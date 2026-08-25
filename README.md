@@ -15,6 +15,7 @@
   <img src="https://img.shields.io/badge/Platform-Android-green?logo=android" alt="Android" />
   <img src="https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-orange?logo=firebase" alt="Firebase" />
   <img src="https://img.shields.io/badge/Status-Production%20Ready-success" alt="Status" />
+  <a href="https://github.com/SparshMishra09/Astroid_Shooter/releases/latest"><img src="https://img.shields.io/github/v/release/SparshMishra09/Astroid_Shooter?label=Download&logo=android" alt="Download Latest Release" /></a>
 </p>
 
 ---
