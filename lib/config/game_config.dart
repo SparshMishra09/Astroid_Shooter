@@ -54,6 +54,19 @@ class GameConfig {
   static const int marksmanBossShootInterval = 90; // 1.5s
   static const int marksmanMinionCount = 3; // escorts spawned with boss
 
+  // --- Shielded burst boss (Bulwark Sentinel) ---
+  static const int shieldedBossShieldHealth = 15; // hits to break shield
+  static const int shieldedBossShootInterval = 150; // 2.5s between bursts
+  static const int bossBurstBulletInterval = 6; // frames between burst shots
+  static const double shieldedBossSpeed = 1.6;
+
+  // --- Laser cannon boss (Void Lancer) ---
+  static const int laserBossShootInterval = 240; // 4s between laser cycles
+  static const int bossLaserChargeDuration = 60; // 1s telegraph before beam
+  static const int bossLaserFireDuration = 75; // 1.25s beam
+  static const double bossLaserWidth = 26;
+  static const double laserBossSpeed = 1.9;
+
   // --- Boss variant movement ---
   static const double triBeamBossSpeed = 2.0;
   static const double rapidFireBossSpeed = 3.0;

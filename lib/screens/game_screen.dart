@@ -360,6 +360,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
                       // Boss
                       if (c.activeBoss != null) BossWidget(boss: c.activeBoss!, frameCount: c.frameCount),
+
+                      // Void Lancer's laser beam (renders the charge
+                      // telegraph + lethal beam under the boss)
+                      if (c.activeBoss != null)
+                        BossLaserBeamWidget(
+                          boss: c.activeBoss!,
+                          screenHeight: _screenHeight,
+                          frameCount: c.frameCount,
+                          beamWidth: GameConfig.bossLaserWidth,
+                        ),
                     ],
                   ),
                 ),

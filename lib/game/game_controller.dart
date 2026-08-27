@@ -369,6 +369,19 @@ class GameController {
 
     if (activeBoss != null) {
       activeBoss!.update(screenHeight, screenWidth);
+
+      // Per-frame attack state for the two stateful variants.
+      switch (activeBoss!.bossType) {
+        case BossType.shieldedBurst:
+          _tickBossBurst();
+          break;
+        case BossType.laserCannon:
+          _tickBossLaser();
+          break;
+        default:
+          break;
+      }
+
       if (activeBoss!.shouldShoot()) {
         fireBossAttack();
       }
@@ -404,6 +417,12 @@ class GameController {
         break;
       case BossType.marksman:
         _fireAimedShot();
+        break;
+      case BossType.shieldedBurst:
+        _startBossBurst();
+        break;
+      case BossType.laserCannon:
+        _startBossLaserCharge();
         break;
     }
   }
@@ -465,6 +484,118 @@ class GameController {
       speedY: (dy / len) * GameConfig.bossBulletSpeed,
       speedX: (dx / len) * GameConfig.bossBulletSpeed,
     ));
+  }
+
+  /// Start the Bulwark Sentinel's burst: lock the aim line at the
+  /// player, then fire 3 bullets along it (one every few frames).
+  void _startBossBurst() {
+    final boss = activeBoss!;
+    final dx = (player.x + player.width / 2) - _bossMuzzleX;
+    final dy = (player.y + player.height / 2) - _bossMuzzleY;
+    final len = sqrt(dx * dx + dy * dy);
+    if (len < 1) {
+      boss.burstDirX = 0;
+      boss.burstDirY = 1;
+    } else {
+      boss.burstDirX = dx / len;
+      boss.burstDirY = dy / len;
+    }
+    boss.burstShotsRemaining = 3;
+    boss.burstNextShotFrame = frameCount + 6;
+  }
+
+  /// Emit one bullet of the pending burst, all sharing the locked aim
+  /// direction so the string travels as a single dodgeable line.
+  void _tickBossBurst() {
+    final boss = activeBoss!;
+    if (boss.burstShotsRemaining <= 0 || frameCount < boss.burstNextShotFrame) {
+      return;
+    }
+    final speed = GameConfig.bossBulletSpeed * 1.2;
+    enemyBullets.add(EnemyBullet(
+      x: _bossMuzzleX - 5,
+      y: _bossMuzzleY,
+      width: 10,
+      height: 15,
+      speedY: boss.burstDirY * speed,
+      speedX: boss.burstDirX * speed,
+    ));
+    boss.burstShotsRemaining--;
+    boss.burstNextShotFrame = frameCount + GameConfig.bossBurstBulletInterval;
+  }
+
+  /// Begin the Void Lancer's laser cycle: 1s charge telegraph, then the
+  /// beam. The boss freezes in place for the whole sequence.
+  void _startBossLaserCharge() {
+    final boss = activeBoss!;
+    if (boss.laserPhase != BossLaserPhase.idle) return;
+    boss.laserPhase = BossLaserPhase.charging;
+    boss.laserTimer = GameConfig.bossLaserChargeDuration;
+    callbacks.onShake(0.3); // warning rumble
+  }
+
+  /// Detect the charge->fire transition and shake the screen when the
+  /// beam goes live. Player collision is checked in [checkCollisions].
+  void _tickBossLaser() {
+    final boss = activeBoss!;
+    if (boss.laserPhase == BossLaserPhase.firing &&
+        boss.laserTimer == GameConfig.bossLaserFireDuration) {
+      callbacks.onShake(0.7);
+    }
+  }
+
+  /// Chip the boss's shield. On the breaking hit, a cyan flash + shake
+  /// makes the shield-down moment read clearly.
+  void _damageBossShield(double x, double y) {
+    activeBoss!.damageShield(1);
+    hitEffects.add(HitEffect(x: x, y: y, color: Colors.cyan, size: 20));
+    callbacks.onHit();
+    if (!activeBoss!.hasShield) {
+      explosionEffects.add(ExplosionEffect(
+        x: activeBoss!.x + activeBoss!.width / 2,
+        y: activeBoss!.y + activeBoss!.height / 4,
+        particleCount: 16,
+        duration: 50,
+        colors: [Colors.cyan, Colors.white, Colors.lightBlue],
+      ));
+      callbacks.onShake(0.8);
+      floatingTexts.add(FloatingText(
+        text: 'SHIELD DOWN!',
+        x: screenWidth / 2 - 80,
+        y: screenHeight / 3,
+        color: Colors.cyan,
+        lifeTimer: 120,
+        fontSize: 20,
+      ));
+    }
+  }
+
+  /// The Void Lancer's beam: instantly lethal through lives AND
+  /// invulnerability — only an active shield saves the player.
+  void _hitPlayerWithBossLaser() {
+    if (hasShield && shieldHitsRemaining > 0) {
+      hasShield = false;
+      shieldHitsRemaining = 0;
+      deactivatePowerUp(PowerUpType.shield);
+      // Grace period so the rest of the beam doesn't kill immediately.
+      player.isInvulnerable = true;
+      player.invulnerabilityTimer = GameConfig.invulnerabilityFrames;
+      callbacks.onHit();
+      callbacks.onShake(0.8);
+      floatingTexts.add(FloatingText(
+        text: 'SHIELD ABSORBED IT!',
+        x: player.x - 40,
+        y: player.y - 30,
+        color: Colors.blue,
+        lifeTimer: 120,
+        fontSize: 16,
+      ));
+    } else {
+      player.lives = 0;
+      callbacks.onHit();
+      callbacks.onShake(1.0);
+      gameOver();
+    }
   }
 
   void spawnEnemies() {
@@ -790,19 +921,23 @@ class GameController {
         }
       }
 
-      // Bullet vs boss
+      // Bullet vs boss (shielded variants absorb hits until the dome breaks)
       if (activeBoss != null && activeBoss!.isVisible && bullet.isVisible) {
         if (bullet.collidesWith(activeBoss!)) {
           bullet.isVisible = false;
-          final destroyed = activeBoss!.takeDamage(1);
-          hitEffects.add(HitEffect(
-            x: bullet.x,
-            y: bullet.y,
-            color: Colors.orange,
-            size: 18,
-          ));
-          if (destroyed) {
-            defeatBoss();
+          if (activeBoss!.hasShield) {
+            _damageBossShield(bullet.x, bullet.y);
+          } else {
+            final destroyed = activeBoss!.takeDamage(1);
+            hitEffects.add(HitEffect(
+              x: bullet.x,
+              y: bullet.y,
+              color: Colors.orange,
+              size: 18,
+            ));
+            if (destroyed) {
+              defeatBoss();
+            }
           }
         }
       }
@@ -836,7 +971,9 @@ class GameController {
 
       if (activeBoss != null && activeBoss!.isVisible) {
         if (laser.collidesWith(activeBoss!)) {
-          if (activeBoss!.takeDamage(1)) {
+          if (activeBoss!.hasShield) {
+            _damageBossShield(laser.x, activeBoss!.y + activeBoss!.height / 2);
+          } else if (activeBoss!.takeDamage(1)) {
             defeatBoss();
           }
         }
@@ -873,6 +1010,19 @@ class GameController {
     if (activeBoss != null && activeBoss!.isVisible) {
       if (player.collidesWith(activeBoss!)) {
         handlePlayerHit();
+      }
+    }
+
+    // --- Player vs boss laser beam (Void Lancer) ---
+    // A vertical instant-kill column under the boss while it fires.
+    if (activeBoss != null && activeBoss!.laserPhase == BossLaserPhase.firing) {
+      final beamCenter = activeBoss!.x + activeBoss!.width / 2;
+      final halfBeam = GameConfig.bossLaserWidth / 2;
+      final beamTop = activeBoss!.y + activeBoss!.height;
+      if (player.x < beamCenter + halfBeam &&
+          player.x + player.width > beamCenter - halfBeam &&
+          player.y + player.height > beamTop) {
+        _hitPlayerWithBossLaser();
       }
     }
 

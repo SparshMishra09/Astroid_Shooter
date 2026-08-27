@@ -173,7 +173,8 @@ class EnemyShipWidget extends StatelessWidget {
   }
 }
 
-/// Boss dreadnought — CustomPainter redesign + health bar.
+/// Boss dreadnought — CustomPainter redesign + health bar (+ shield bar
+/// for the Bulwark Sentinel).
 class BossWidget extends StatelessWidget {
   const BossWidget({super.key, required this.boss, required this.frameCount});
   final Boss boss;
@@ -183,6 +184,8 @@ class BossWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!boss.isVisible) return const SizedBox.shrink();
     final healthPct = (boss.health / boss.maxHealth).clamp(0.0, 1.0);
+    final shieldPct =
+        boss.maxShieldHealth > 0 ? (boss.shieldHealth / boss.maxShieldHealth).clamp(0.0, 1.0) : 0.0;
 
     return Positioned(
       left: boss.x,
@@ -196,10 +199,49 @@ class BossWidget extends StatelessWidget {
             width: boss.width,
             height: boss.height,
             child: CustomPaint(
-              painter: BossPainter(health: boss.health, maxHealth: boss.maxHealth, frameCount: frameCount),
+              painter: BossPainter(
+                health: boss.health,
+                maxHealth: boss.maxHealth,
+                frameCount: frameCount,
+                bossType: boss.bossType,
+                shieldHealth: boss.shieldHealth,
+                maxShieldHealth: boss.maxShieldHealth,
+                laserChargeProgress: boss.laserChargeProgress,
+              ),
             ),
           ),
           const SizedBox(height: 4),
+          // Shield bar (Bulwark Sentinel only) — sits above the hull bar
+          if (boss.maxShieldHealth > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: SizedBox(
+                width: boss.width,
+                child: Stack(
+                  children: [
+                    Container(
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(3),
+                        border: Border.all(color: Colors.white38, width: 1),
+                      ),
+                    ),
+                    FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: shieldPct,
+                      child: Container(
+                        height: 5,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Colors.cyan, Colors.lightBlueAccent]),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Health bar
           SizedBox(
             width: boss.width,
@@ -228,6 +270,162 @@ class BossWidget extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Void Lancer's laser: a vertical instant-kill beam fired
+/// straight down from the boss's cannon.
+///
+/// While the boss CHARGES, this renders a thin blinking red warning
+/// line (the telegraph); while FIRING it renders the full lethal beam
+/// — white-hot core, red energy body, flickering aura, impact flare at
+/// the bottom of the screen.
+class BossLaserBeamWidget extends StatelessWidget {
+  const BossLaserBeamWidget({
+    super.key,
+    required this.boss,
+    required this.screenHeight,
+    required this.frameCount,
+    required this.beamWidth,
+  });
+
+  final Boss boss;
+
+  /// Screen height — the beam runs from the boss's cannon to the
+  /// bottom edge, passed in rather than using MediaQuery so it stays a
+  /// pure function of game state.
+  final double screenHeight;
+  final int frameCount;
+  final double beamWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!boss.isVisible ||
+        (boss.laserPhase != BossLaserPhase.charging &&
+            boss.laserPhase != BossLaserPhase.firing)) {
+      return const SizedBox.shrink();
+    }
+
+    final beamCenter = boss.x + boss.width / 2;
+    final beamTop = boss.y + boss.height;
+    final beamHeight = screenHeight - beamTop;
+    final t = frameCount.toDouble();
+    final flicker = 0.75 + 0.25 * sin(t * 1.1);
+
+    // --- Telegraph: thin blinking warning line while charging ---
+    if (boss.laserPhase == BossLaserPhase.charging) {
+      final blink = (sin(t * 0.5) > 0) ? 0.8 : 0.25;
+      return Positioned(
+        left: beamCenter - 1.5,
+        top: beamTop,
+        width: 3,
+        height: beamHeight,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.red.withOpacity(blink),
+                Colors.red.withOpacity(blink * 0.5),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // --- Full beam while firing ---
+    final auraWidth = beamWidth * 2.6;
+    return Positioned(
+      left: beamCenter - auraWidth / 2,
+      top: beamTop,
+      width: auraWidth,
+      height: beamHeight,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.none,
+        children: [
+          // Aura
+          Center(
+            child: Container(
+              width: auraWidth,
+              height: beamHeight,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.red.withOpacity(0.35 * flicker),
+                    Colors.deepOrange.withOpacity(0.15),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          // Beam body
+          Container(
+            width: beamWidth,
+            height: beamHeight,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withOpacity(0.95),
+                  Colors.red.withOpacity(0.9),
+                  Colors.deepOrange.withOpacity(0.85 * flicker),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.7 * flicker),
+                  spreadRadius: 3,
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+          ),
+          // White-hot core
+          Container(
+            width: beamWidth * 0.4,
+            height: beamHeight,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white,
+                  Colors.white.withOpacity(0.85 * flicker),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Impact flare at the bottom of the screen
+          Positioned(
+            bottom: -10,
+            child: Container(
+              width: beamWidth * 2.2,
+              height: beamWidth * 1.2,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.9),
+                    Colors.red.withOpacity(0.6 * flicker),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                ),
+              ),
             ),
           ),
         ],

@@ -11,10 +11,15 @@ import '../config/game_config.dart';
 /// Rules:
 ///   • Exactly one boss is on screen at a time. After each defeat there
 ///     is a 10-second breather before the next spawns.
-///   • Boss order is RANDOM — any of the four variants (tri-beam,
-///     rapid-fire, penta-beam, escort carrier) can appear at any time.
+///   • Boss order is RANDOM — any of the six variants (tri-beam,
+///     rapid-fire, penta-beam, escort carrier, bulwark sentinel, void
+///     lancer) can appear at any time, all with equal odds.
 ///   • The marksman (escort carrier) boss brings 3 enemy-fighter
 ///     minions that each fire single aimed-downward shots.
+///   • The bulwark sentinel is shielded — break the dome before the
+///     hull takes damage; it fires 3-bullet bursts in a straight line.
+///   • The void lancer freezes to charge and fire a vertical instant-
+///     kill laser (survivable only with an active shield).
 ///   • With no asteroids to farm, power-ups drop at random intervals so
 ///     the player can still use abilities.
 ///   • The laser beam is a RARE find here (~10% of drops instead of the
@@ -100,11 +105,22 @@ class BossRushMode extends GameModeConfig {
   @override
   bool shouldSpawnBoss(GameState state, int destroyed) => true;
 
+  /// The variants this mode may spawn, with equal odds. Explicit list
+  /// so variants exclusive to other modes never leak in.
+  static const List<BossType> _bossPool = [
+    BossType.triBeam,
+    BossType.rapidFire,
+    BossType.pentaBeam,
+    BossType.marksman,
+    BossType.shieldedBurst,
+    BossType.laserCannon,
+  ];
+
   /// Boss order is RANDOM: any variant can be next, regardless of what
   /// was defeated before ([bossesDefeated] is ignored on purpose).
   @override
   Boss createBoss(int bossesDefeated, double screenWidth, double bossSize) {
-    final type = BossType.values[Random().nextInt(BossType.values.length)];
+    final type = _bossPool[Random().nextInt(_bossPool.length)];
     return Boss.createTyped(type, screenWidth, bossSize);
   }
 
