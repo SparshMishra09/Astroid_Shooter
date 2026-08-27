@@ -431,11 +431,13 @@ class GameController {
     ));
   }
 
-  /// Penta shot: 5 bullets in a V spread — one straight up, two at ±15°,
-  /// two at ±30°. The cadence is slower (see GameModeConfig's shared
-  /// getShotInterval), and rapid fire stacks to speed it back up.
+  /// Penta shot: 5 bullets in a tight upward Λ (upside-down V) — one
+  /// straight up and pairs at ±10°/±20°, so every bullet travels
+  /// upward in a wedge instead of scattering. The cadence is slower
+  /// (see GameModeConfig's shared getShotInterval), and rapid fire
+  /// stacks to speed it back up.
   void firePentaShot() {
-    for (final angleDeg in const [-30.0, -15.0, 0.0, 15.0, 30.0]) {
+    for (final angleDeg in const [-20.0, -10.0, 0.0, 10.0, 20.0]) {
       final angle = angleDeg * (pi / 180);
       bullets.add(Bullet(
         x: player.x + player.width / 2 - bulletWidth / 2,

@@ -17,6 +17,19 @@ class ClassicRunMode extends GameModeConfig {
   @override
   bool get powerUpsEnabled => true;
 
+  /// Every ability at normal odds EXCEPT wing drones — two extra
+  /// rapid-firing ships is the strongest ability, so it's rarer to
+  /// keep runs challenging (see [GameConfig.wingDronesPowerUpWeight]).
+  @override
+  Map<PowerUpType, double> get powerUpWeights => const {
+        PowerUpType.shield: 1,
+        PowerUpType.rapidFire: 1,
+        PowerUpType.tripleShot: 1,
+        PowerUpType.laserBeam: 1,
+        PowerUpType.pentaShot: 1,
+        PowerUpType.wingDrones: GameConfig.wingDronesPowerUpWeight,
+      };
+
   @override
   bool get asteroidsEnabled => true;
 

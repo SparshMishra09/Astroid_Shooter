@@ -53,6 +53,8 @@ class BossRushMode extends GameModeConfig {
   @override
   bool get randomPowerUpsEnabled => true;
 
+  /// Laser is rare here (boss-shredder), and wing drones — the game's
+  /// strongest ability — are rare in every mode.
   @override
   Map<PowerUpType, double> get powerUpWeights => {
         PowerUpType.shield: 1,
@@ -60,7 +62,7 @@ class BossRushMode extends GameModeConfig {
         PowerUpType.tripleShot: 1,
         PowerUpType.laserBeam: GameConfig.bossRushLaserPowerUpWeight,
         PowerUpType.pentaShot: 1,
-        PowerUpType.wingDrones: 1,
+        PowerUpType.wingDrones: GameConfig.wingDronesPowerUpWeight,
       };
 
   @override

@@ -97,6 +97,12 @@ class GameConfig {
   // that landing one feels like a jackpot.
   static const double bossRushLaserPowerUpWeight = 0.33;
 
+  // --- Wing drones rarity (both modes) ---
+  // Two extra rapid-firing ships is the strongest ability in the game,
+  // so it drops at roughly a third of the normal rate — common enough
+  // to find, rare enough that runs stay challenging.
+  static const double wingDronesPowerUpWeight = 0.35;
+
   // --- Power-up drop ---
   static const double powerUpDropChance = 0.05; // 5%
   static const double waveBreakBonusDropChance = 0.20; // 20%

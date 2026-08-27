@@ -39,9 +39,9 @@
 
 ## 📋 Overview
 
-**Space Wars** is a vertically-scrolling arcade shooter built with Flutter. The player controls a spaceship at the bottom of the screen, dragging left and right to dodge debris while the ship auto-fires upward. The game features a wave-based difficulty curve, four types of power-ups, combo multipliers, and boss battles against armored dreadnoughts.
+**Space Wars** is a vertically-scrolling arcade shooter built with Flutter. The player controls a spaceship at the bottom of the screen, dragging left and right to dodge debris while the ship auto-fires upward. The game features **two game modes** (Classic Run and Boss Rush), a wave-based difficulty curve, **six power-ups** with stacking rules, combo multipliers, and boss battles against **eight distinct dreadnought variants**.
 
-Every astrid (in-game currency) you earn is saved to your account via Firebase. Compete against other pilots on the global leaderboard, tracked by best score, highest wave, and total asteroids destroyed.
+Every astrid (in-game currency) you earn is saved to your account via Firebase. Compete against other pilots on the global leaderboard plus per-mode boards — tracked by best score, highest wave/boss, asteroids destroyed, and bosses defeated.
 
 ### Target Audience
 - Casual and mid-core mobile gamers who enjoy arcade shooters
@@ -53,14 +53,22 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 ## 🎮 Gameplay
 
 ### Core Loop
-1. **Drag** to move your ship horizontally
-2. Your ship **auto-fires** bullets upward
-3. **Destroy** asteroids and enemies to earn **astrids** (currency)
-4. **Survive** waves — each wave gets harder with more enemies and faster spawns
-5. **Collect** power-ups dropped by destroyed enemies
-6. **Build combos** — consecutive hits without missing multiply your score
-7. **Defeat bosses** — every 150 kills summons a dreadnought with 50 HP
-8. **Die** — your run ends, astrids are banked to your account, stats update on the leaderboard
+1. **Pick a mode** — Classic Run (waves) or Boss Rush (endless bosses)
+2. **Drag** to move your ship horizontally
+3. Your ship **auto-fires** bullets upward
+4. **Destroy** asteroids and enemies to earn **astrids** (currency)
+5. **Survive** waves — each wave gets harder with more enemies and faster spawns
+6. **Collect** power-ups dropped by destroyed enemies
+7. **Build combos** — consecutive hits without missing multiply your score
+8. **Defeat bosses** — every 150 kills (Classic) or back-to-back (Boss Rush)
+9. **Die** — your run ends, astrids are banked to your account, stats update on the leaderboard
+
+### Game Modes
+
+| Mode | Description |
+|------|-------------|
+| **Classic Run** | The original endless run — timed waves that grow harder, full enemy mix, a boss dreadnought every 150 kills. Enemy fighters join from wave 3. |
+| **Boss Rush** | No asteroids, no waves — an endless gauntlet of bosses in random order (all 8 variants, equal odds), one at a time with a 10-second breather between kills. Power-ups drop on a timer; the laser is a rare jackpot find (~10% instead of 25%) so it can't trivialize boss fights. |
 
 ### Enemy Types
 
@@ -70,16 +78,32 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 | **Small Fast Asteroid** | Glowing rocky shard | 1 | 15 | Fast, sharp, leaves a motion trail |
 | **Huge Slow Asteroid** | Jagged rocky boulder | 3 | 30 | Tough — splits into 2 small asteroids when destroyed |
 | **Enemy Fighter** | Evil-twin crimson ship | 1 | 40 | Moves horizontally, descends, fires downward |
-| **Boss Dreadnought** | Armored capital battleship | 50 | 200 | Zigzag movement, spread-shot cannon, energy core shifts color with health |
+
+### Boss Variants
+
+| Boss | HP | Astrids | Attack Pattern |
+|------|-----|---------|----------------|
+| **Tri-Beam Dreadnought** | 50 | 200 | 3-way bullet spread — the Classic Run boss (every 150 kills) |
+| **Rapid-Fire Boss** | 45 | 300 | Bullet hose — fast single shots straight down |
+| **Penta-Beam Boss** | 60 | 400 | 5-way bullet spread |
+| **Escort Carrier** | 70 | 500 | Single aimed shot + 3 enemy-fighter escorts |
+| **Bulwark Sentinel** | 45 (+15 shield) | 350 | 15-hit energy shield must be broken first; fires 10-bullet bursts in one locked line at the player |
+| **Void Lancer** | 55 | 450 | Freezes to charge (1s telegraph), then fires a vertical instant-kill laser — only an active shield survives it |
+| **Demolition Titan** | 55 | 380 | Drops bomb barrels that fall to the player's level, then detonate in a blast radius |
+| **Serpent Volley** | 50 | 360 | 7 bullets straight down in a V formation — the center arrives first, the wall snakes toward you |
+
+*The last six variants are Boss Rush exclusive.*
 
 ### Power-Ups
 
 | Power-Up | Duration | Effect |
 |----------|----------|--------|
-| 🛡️ **Shield** | 10 sec | Absorbs one hit |
-| 🔴 **Rapid Fire** | 8 sec | Halves your shot interval |
+| 🛡️ **Shield** | 10 sec | Absorbs one hit — also survives the Void Lancer's laser and absorbs bomb blasts |
+| 🔴 **Rapid Fire** | 8 sec | Halves your shot interval — **stacks with Penta Shot** |
 | 🟢 **Triple Shot** | 6 sec | Fires three bullets in a spread |
-| 🟣 **Laser Beam** | 4 sec | Continuous vertical laser beam |
+| 🟣 **Laser Beam** | 4 sec | Continuous vertical laser beam — rare drop in Boss Rush |
+| 🩵 **Penta Shot** | 7 sec | 5 bullets in a tight upward Λ wedge at a slightly slower cadence — replaces Triple Shot (last-equipped wins), stacks with Rapid Fire |
+| 💚 **Wing Drones** | 9 sec | Two invulnerable companion ships flank you with constant rapid fire — rare drop in both modes |
 
 ### Combo System
 - Every consecutive hit increases your combo multiplier (up to **3.0×**)
@@ -102,11 +126,13 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 
 ### 🎯 Core Game
 - **Drag-to-move** controls with auto-fire — intuitive, one-thumb play
-- **Wave-based progression** with escalating difficulty
-- **5 enemy types** with unique behaviors and visuals
-- **4 power-ups** with timed effects
+- **Two game modes** — Classic Run (wave-based) and Boss Rush (endless boss gauntlet)
+- **4 enemy types** with unique behaviors and visuals
+- **8 boss variants** with distinct attack patterns (shield dome, instant-kill laser, bomb barrages, V-formations...)
+- **6 power-ups** with stacking rules (Rapid Fire + Penta Shot combine; drones/shield/laser run independently)
 - **Combo multiplier** system for skillful play
-- **Boss battles** every 150 kills against a 50-HP dreadnought
+- **Boss battles** every 150 kills (Classic) or back-to-back (Boss Rush)
+- **Haptic feedback** — heavy impact on laser activation, a double-tick celebration on every boss kill
 - **Screen shake**, explosions, hit sparks, muzzle flashes, and engine trails
 - **Animated parallax starfield** background
 
@@ -116,13 +142,12 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 - **Space-themed auth UI** with animated starfield, glowing tab bar, and pulsing title
 - **Per-user profiles** stored in Firestore
 
-### 📊 Progression & Leaderboard
-- **Astrids** — persistent currency accumulated across all games (for future shop)
-- **Best Score** — highest single-game score
-- **Highest Wave** — furthest wave reached
-- **Total Destroyed** — lifetime asteroids/enemies destroyed
-- **Real-time leaderboard** with three sort categories: Best Score, Highest Wave, Total Destroyed
-- **Live updates** — leaderboard refreshes instantly when any player finishes a game
+### 📊 Progression & Leaderboards
+- **Astrids** — persistent currency accumulated across all games and modes (for future shop)
+- **Global board** — Highest Astrids, across every mode
+- **Per-mode boards** — Classic Run (Best Score / Highest Wave / Asteroids Destroyed) and Boss Rush (Best Score / Highest Boss / Bosses Defeated), each counting only that mode's games
+- **Real-time updates** — every board refreshes instantly when any player finishes a game
+- **Legacy-friendly** — pre-mode-split stats carry over as Classic Run stats
 
 ### 🎨 Visual Design
 - **Custom-painted entities** — enemy fighter, boss dreadnought, huge asteroid, and small asteroid are all rendered with detailed `CustomPainter` implementations (no sprite sheets)
@@ -196,18 +221,19 @@ Space Wars is built with a **scalable, modular architecture** designed for easy 
 
 ```
 GameModeConfig (abstract interface)
-    ├── ClassicRunMode (current)
+    ├── ClassicRunMode
+    ├── BossRushMode
     └── [FutureMode] (add by implementing the interface + registering)
 ```
 
 Each game mode implements `GameModeConfig`, which defines:
 - Display name
-- Whether power-ups are enabled
-- Shot interval logic
-- Asteroid spawn rates
-- Enemy spawn intervals and probability tables
+- Whether power-ups / asteroids / waves / special enemies are enabled
+- Shot interval logic (with power-up stacking)
+- Power-up drop weights (per-mode rarity tuning)
+- Asteroid and enemy spawn rates + probability tables
 - Wave duration
-- Boss spawn conditions
+- Boss spawn conditions, respawn cooldown, and which boss variants spawn
 - Wave intro/notify text
 
 **Adding a new game mode = one new file + one enum entry. No existing code changes.**
@@ -291,6 +317,7 @@ asteroid_shooter/
 │   ├── game/                              # Game logic (strategy pattern)
 │   │   ├── game_mode.dart                 # Abstract GameModeConfig interface
 │   │   ├── classic_run_mode.dart          # Classic Run implementation
+│   │   ├── boss_rush_mode.dart            # Boss Rush implementation (8-boss pool)
 │   │   ├── game_mode_registry.dart        # Enum → config factory
 │   │   └── game_controller.dart           # ALL game logic (spawn, move, collide, score)
 │   │
@@ -309,8 +336,9 @@ asteroid_shooter/
 │   │
 │   ├── screens/                           # App screens
 │   │   ├── home_screen.dart               # Stats, play button, leaderboard access
+│   │   ├── mode_selection_screen.dart     # Game mode picker (Classic Run / Boss Rush)
 │   │   ├── game_screen.dart               # Thin view: Timer + gestures + widget tree
-│   │   └── leaderboard_screen.dart        # Real-time leaderboard with 3 sort categories
+│   │   └── leaderboard_screen.dart        # Global + per-mode real-time leaderboards
 │   │
 │   ├── services/                          # Backend services
 │   │   ├── user_progress_service.dart     # Firestore progress + leaderboard
@@ -392,7 +420,7 @@ Download `google-services.json` and place it at `android/app/google-services.jso
 
 ## 🧪 Testing
 
-The project includes a comprehensive test suite (25 tests) covering stability, game flow, auth UI, and progress tracking:
+The project includes a comprehensive test suite (27 tests) covering stability, game flow, auth UI, and progress tracking:
 
 ```bash
 # Run all tests
@@ -406,7 +434,7 @@ flutter test test/freeze_regression_test.dart
 |-----------|-------|----------------|
 | `freeze_regression_test.dart` | 7 | ConcurrentModificationError prevention, game loop survival over 300+ frames, pending enemy flush |
 | `game_flow_test.dart` | 10 | GameController init, tick advancement, GameScreen rendering, AuthScreen UI (tabs, validation, password toggle) |
-| `progress_test.dart` | 7 | GameState wave tracking, UserProgress model parsing, legacy account handling, numeric type safety |
+| `progress_test.dart` | 9 | GameState wave tracking, UserProgress model parsing, per-mode stats, legacy → Classic migration, numeric type safety |
 | `widget_test.dart` | 1 | Auth screen builds without errors |
 
 ---
@@ -414,12 +442,11 @@ flutter test test/freeze_regression_test.dart
 ## 🗺️ Roadmap
 
 - [ ] **Shop system** — spend accumulated astrids on ship skins, weapon upgrades, and power-up boosts
-- [ ] **Additional game modes** — Time Attack, Endless, Boss Rush
+- [ ] **Additional game modes** — Time Attack, Endless Survival, Daily Challenge (seeded runs)
 - [ ] **Achievements** — milestone-based rewards (first boss kill, 1000 destroyed, etc.)
-- [ ] **Cloud save sync** — seamless progress across devices
-- [ ] **Sound settings** — volume controls for music and SFX
+- [ ] **Sound settings** — volume controls for music and SFX (plus bundling the audio assets)
 - [ ] **iOS support** — Apple Sign-In + App Store deployment
-- [ ] **Daily challenges** — rotating objectives for bonus astrids
+- [ ] **Boss phase transitions** — bosses change attack patterns at 50%/25% health
 
 ---
 
