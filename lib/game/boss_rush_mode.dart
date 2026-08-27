@@ -114,6 +114,8 @@ class BossRushMode extends GameModeConfig {
     BossType.marksman,
     BossType.shieldedBurst,
     BossType.laserCannon,
+    BossType.bombardier,
+    BossType.serpentVolley,
   ];
 
   /// Boss order is RANDOM: any variant can be next, regardless of what

@@ -358,6 +358,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       // Enemy bullets
                       for (var b in c.enemyBullets) EnemyBulletWidget(bullet: b, frameCount: c.frameCount),
 
+                      // Bomb barrels (Demolition Titan)
+                      for (var b in c.bombBarrels)
+                        BombBarrelWidget(barrel: b, frameCount: c.frameCount),
+
                       // Boss
                       if (c.activeBoss != null) BossWidget(boss: c.activeBoss!, frameCount: c.frameCount),
 

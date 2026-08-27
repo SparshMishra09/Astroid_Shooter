@@ -26,7 +26,7 @@ enum EnemyType {
 
 /// Boss variants. Each has a distinct attack pattern and energy color.
 ///
-/// Boss Rush spawns all six in random order; Classic Run only uses
+/// Boss Rush spawns all eight in random order; Classic Run only uses
 /// [triBeam] (the original dreadnought).
 enum BossType {
   /// 3-way bullet spread — the original dreadnought.
@@ -42,11 +42,20 @@ enum BossType {
   marksman,
 
   /// Energy shield that must be broken before the hull takes damage,
-  /// plus bursts of 3 bullets in a single line aimed at the player.
+  /// plus bursts of 10 bullets in a single line aimed at the player.
   /// Boss Rush exclusive.
   shieldedBurst,
 
   /// Stops moving to charge and fire a vertical instant-kill laser
   /// (survivable only with an active shield). Boss Rush exclusive.
   laserCannon,
+
+  /// Drops bomb barrels that fall, then detonate in a blast radius the
+  /// player must dodge. Boss Rush exclusive.
+  bombardier,
+
+  /// Fires a 7-bullet volley in a V formation — all straight down, but
+  /// staggered vertically so the wall snakes toward the player.
+  /// Boss Rush exclusive.
+  serpentVolley,
 }

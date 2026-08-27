@@ -154,6 +154,10 @@ class Boss extends Enemy {
         return 'BULWARK SENTINEL';
       case BossType.laserCannon:
         return 'VOID LANCER';
+      case BossType.bombardier:
+        return 'DEMOLITION TITAN';
+      case BossType.serpentVolley:
+        return 'SERPENT VOLLEY';
     }
   }
 
@@ -240,6 +244,30 @@ class Boss extends Enemy {
           scoreValue: ScoreValues.bossLaserCannon,
           shootInterval: GameConfig.laserBossShootInterval,
           speedX: GameConfig.laserBossSpeed,
+        );
+      case BossType.bombardier:
+        return Boss(
+          x: screenWidth / 2 - bossSize / 2,
+          y: 100,
+          width: bossSize,
+          height: bossSize * 0.8,
+          bossType: type,
+          health: 55,
+          scoreValue: ScoreValues.bossBombardier,
+          shootInterval: GameConfig.bombardierShootInterval,
+          speedX: GameConfig.bombardierSpeed,
+        );
+      case BossType.serpentVolley:
+        return Boss(
+          x: screenWidth / 2 - bossSize / 2,
+          y: 100,
+          width: bossSize,
+          height: bossSize * 0.8,
+          bossType: type,
+          health: 50,
+          scoreValue: ScoreValues.bossSerpentVolley,
+          shootInterval: GameConfig.serpentShootInterval,
+          speedX: GameConfig.serpentBossSpeed,
         );
     }
   }

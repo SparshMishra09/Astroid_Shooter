@@ -15,4 +15,6 @@ class ScoreValues {
   static const int bossMarksman = 500;
   static const int bossShieldedBurst = 350;
   static const int bossLaserCannon = 450;
+  static const int bossBombardier = 380;
+  static const int bossSerpentVolley = 360;
 }

@@ -57,7 +57,8 @@ class GameConfig {
   // --- Shielded burst boss (Bulwark Sentinel) ---
   static const int shieldedBossShieldHealth = 15; // hits to break shield
   static const int shieldedBossShootInterval = 150; // 2.5s between bursts
-  static const int bossBurstBulletInterval = 6; // frames between burst shots
+  static const int bossBurstBulletCount = 10; // bullets per burst line
+  static const int bossBurstBulletInterval = 5; // frames between burst shots
   static const double shieldedBossSpeed = 1.6;
 
   // --- Laser cannon boss (Void Lancer) ---
@@ -66,6 +67,24 @@ class GameConfig {
   static const int bossLaserFireDuration = 75; // 1.25s beam
   static const double bossLaserWidth = 26;
   static const double laserBossSpeed = 1.9;
+
+  // --- Bombardier boss (Demolition Titan) ---
+  static const int bombardierShootInterval = 120; // 2s between drops
+  static const int bombardierBarrelsPerVolley = 2; // barrels per drop
+  static const double bombardierSpeed = 1.7;
+  static const double bombBarrelSpeed = 2.2;
+  static const double bombBarrelWidth = 18;
+  static const double bombBarrelHeight = 24;
+  static const int bombBarrelMinFuse = 80; // frames until detonation
+  static const int bombBarrelMaxFuse = 140;
+  static const double bombExplosionRadius = 85; // blast damage radius
+
+  // --- Serpent volley boss (Serpent Volley) ---
+  static const int serpentShootInterval = 130; // ~2.2s between volleys
+  static const int serpentBulletCount = 7; // bullets in the V formation
+  static const double serpentBulletGap = 26; // vertical stagger per row
+  static const double serpentBulletSpeed = 3.2;
+  static const double serpentBossSpeed = 1.8;
 
   // --- Boss variant movement ---
   static const double triBeamBossSpeed = 2.0;

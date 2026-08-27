@@ -235,6 +235,101 @@ class BossPainter extends CustomPainter {
       _paintShieldDome(canvas, w, h, cx, cy, pulse);
     } else if (bossType == BossType.laserCannon) {
       _paintLaserCannon(canvas, w, h, cx, cy, pulse);
+    } else if (bossType == BossType.bombardier) {
+      _paintBombBays(canvas, w, h, cx, cy, pulse);
+    } else if (bossType == BossType.serpentVolley) {
+      _paintVolleyPorts(canvas, w, h, cx, cy, pulse);
+    }
+  }
+
+  /// Demolition Titan: two open bomb bays on the wings with hazard
+  /// striping and a glowing orange payload light that pulses — the
+  /// barrels visibly drop from these bays.
+  void _paintBombBays(Canvas canvas, double w, double h, double cx, double cy, double pulse) {
+    for (final side in [-1.0, 1.0]) {
+      final bayCx = cx + side * w * 0.28;
+      final bayCy = h * 0.68;
+
+      // Bay recess — a dark rounded slot.
+      final bayRect = Rect.fromCenter(
+        center: Offset(bayCx, bayCy),
+        width: w * 0.20,
+        height: h * 0.22,
+      );
+      canvas.drawRRect(
+        RRect.fromRectXY(bayRect, 5, 5),
+        Paint()..color = const Color(0xFF141419),
+      );
+      canvas.drawRRect(
+        RRect.fromRectXY(bayRect, 5, 5),
+        Paint()
+          ..color = Colors.orange.withOpacity(0.5)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+
+      // Hazard stripes along the bay rim.
+      final stripePaint = Paint()
+        ..color = Colors.amber.withOpacity(0.7)
+        ..strokeWidth = 2.5;
+      for (int i = 0; i < 3; i++) {
+        final sx = bayCx - w * 0.06 + i * w * 0.06;
+        canvas.drawLine(
+          Offset(sx, bayCy - h * 0.10),
+          Offset(sx + w * 0.03, bayCy + h * 0.10),
+          stripePaint,
+        );
+      }
+
+      // Pulsing payload light — the bomb waiting inside.
+      final payloadPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Colors.white.withOpacity(0.8),
+            Colors.orange.withOpacity(0.6 + 0.3 * pulse),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromCircle(
+          center: Offset(bayCx, bayCy),
+          radius: w * 0.08,
+        ));
+      canvas.drawCircle(Offset(bayCx, bayCy), w * 0.08, payloadPaint);
+    }
+  }
+
+  /// Serpent Volley: a bank of 7 small volley ports in an arc across
+  /// the hull's underside, each with a green pilot light that chases
+  /// across the bank — telegraphing the V formation it fires.
+  void _paintVolleyPorts(Canvas canvas, double w, double h, double cx, double cy, double pulse) {
+    const portCount = 7;
+    for (int i = 0; i < portCount; i++) {
+      final t = (i - (portCount - 1) / 2) / ((portCount - 1) / 2); // -1..1
+      final px = cx + t * w * 0.34;
+      // Ports arc with the V's curve: center port lowest.
+      final py = h * 0.82 - (1 - t.abs()) * h * 0.10;
+
+      // Port housing.
+      canvas.drawCircle(
+        Offset(px, py),
+        w * 0.035,
+        Paint()..color = const Color(0xFF1A1A22),
+      );
+      canvas.drawCircle(
+        Offset(px, py),
+        w * 0.035,
+        Paint()
+          ..color = Colors.green.withOpacity(0.4)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+
+      // Chasing pilot light — each port lights up in turn.
+      final lit = (frameCount ~/ 8 + i) % portCount == 0;
+      canvas.drawCircle(
+        Offset(px, py),
+        w * 0.018,
+        Paint()..color = Colors.greenAccent.withOpacity(lit ? 0.95 : 0.25 + 0.2 * pulse),
+      );
     }
   }
 

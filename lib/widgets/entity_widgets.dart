@@ -438,6 +438,94 @@ class BossLaserBeamWidget extends StatelessWidget {
 //  PROJECTILES
 // ============================================================
 
+/// Bomb barrel dropped by the Demolition Titan: a spinning metal drum
+/// with hazard stripes and a fuse that blinks faster as detonation
+/// nears, ending in a constant red glow in the final moments.
+class BombBarrelWidget extends StatelessWidget {
+  const BombBarrelWidget({super.key, required this.barrel, required this.frameCount});
+  final BombBarrel barrel;
+  final int frameCount;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!barrel.isVisible) return const SizedBox.shrink();
+
+    final fuse = barrel.fuseProgress; // 1 = just lit .. 0 = about to blow
+    final critical = fuse < 0.35;
+
+    // Blink rate accelerates as the fuse burns down.
+    final blinkPeriod = critical ? 4 : (fuse < 0.7 ? 8 : 14);
+    final blinkOn = (frameCount % blinkPeriod) < (blinkPeriod ~/ 2);
+
+    final warningColor = critical ? Colors.red : Colors.orange;
+    final glowOpacity = critical ? (blinkOn ? 0.9 : 0.5) : (blinkOn ? 0.55 : 0.15);
+
+    return Positioned(
+      left: barrel.x,
+      top: barrel.y,
+      width: barrel.width,
+      height: barrel.height,
+      child: Transform.rotate(
+        angle: barrel.rotationAngle,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF5A5A66), Color(0xFF33333C), Color(0xFF5A5A66)],
+            ),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: warningColor.withOpacity(0.6), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: warningColor.withOpacity(glowOpacity),
+                spreadRadius: critical ? 3 : 1,
+                blurRadius: critical ? 12 : 6,
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Hazard stripes
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (int i = 0; i < 2; i++)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      width: 3,
+                      height: barrel.height * 0.55,
+                      color: Colors.amber.withOpacity(0.6),
+                    ),
+                ],
+              ),
+              // Fuse light — blinks, then solid red when critical
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: critical
+                      ? warningColor.withOpacity(blinkOn ? 1.0 : 0.6)
+                      : warningColor.withOpacity(blinkOn ? 0.9 : 0.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: warningColor.withOpacity(glowOpacity),
+                      blurRadius: 6,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Player bullet — approved SVG asset.
 class BulletWidget extends StatelessWidget {
   const BulletWidget({super.key, required this.bullet});

@@ -97,6 +97,7 @@ class GameController {
   List<Enemy> enemies = [];
   List<EnemyBullet> enemyBullets = [];
   Boss? activeBoss;
+  List<BombBarrel> bombBarrels = [];
   List<PowerUp> powerUps = [];
   Map<PowerUpType, ActivePowerUp> activePowerUps = {};
   List<LaserBeam> laserBeams = [];
@@ -165,6 +166,7 @@ class GameController {
     enemies.clear();
     enemyBullets.clear();
     activeBoss = null;
+    bombBarrels.clear();
     powerUps.clear();
     laserBeams.clear();
     floatingTexts.clear();
@@ -367,6 +369,16 @@ class GameController {
       bullet.update(screenHeight);
     }
 
+    // Bomb barrels (Demolition Titan): fall while the fuse burns, then
+    // detonate in a blast radius — or detonate early on player contact.
+    for (var barrel in bombBarrels) {
+      barrel.update(screenHeight);
+      if (!barrel.isVisible) continue;
+      if (barrel.isExploded || player.collidesWith(barrel)) {
+        _explodeBarrel(barrel);
+      }
+    }
+
     if (activeBoss != null) {
       activeBoss!.update(screenHeight, screenWidth);
 
@@ -423,6 +435,12 @@ class GameController {
         break;
       case BossType.laserCannon:
         _startBossLaserCharge();
+        break;
+      case BossType.bombardier:
+        _fireBombBarrels();
+        break;
+      case BossType.serpentVolley:
+        _fireSerpentVolley();
         break;
     }
   }
@@ -487,7 +505,8 @@ class GameController {
   }
 
   /// Start the Bulwark Sentinel's burst: lock the aim line at the
-  /// player, then fire 3 bullets along it (one every few frames).
+  /// player, then fire 10 bullets along it (one every few frames) so
+  /// the stream travels as a single dodgeable line.
   void _startBossBurst() {
     final boss = activeBoss!;
     final dx = (player.x + player.width / 2) - _bossMuzzleX;
@@ -500,7 +519,7 @@ class GameController {
       boss.burstDirX = dx / len;
       boss.burstDirY = dy / len;
     }
-    boss.burstShotsRemaining = 3;
+    boss.burstShotsRemaining = GameConfig.bossBurstBulletCount;
     boss.burstNextShotFrame = frameCount + 6;
   }
 
@@ -566,6 +585,88 @@ class GameController {
         color: Colors.cyan,
         lifeTimer: 120,
         fontSize: 20,
+      ));
+    }
+  }
+
+  /// Demolition Titan: drop 2 bomb barrels per volley — one from each
+  /// wing bay — with randomized fuses so they detonate apart.
+  void _fireBombBarrels() {
+    final boss = activeBoss!;
+    final random = Random();
+    for (int i = 0; i < GameConfig.bombardierBarrelsPerVolley; i++) {
+      final bayX = i == 0
+          ? boss.x + boss.width * 0.28
+          : boss.x + boss.width * 0.72;
+      final fuse = GameConfig.bombBarrelMinFuse +
+          random.nextInt(
+              GameConfig.bombBarrelMaxFuse - GameConfig.bombBarrelMinFuse + 1);
+      bombBarrels.add(BombBarrel(
+        x: bayX - GameConfig.bombBarrelWidth / 2,
+        y: boss.y + boss.height,
+        fuseTime: fuse,
+      ));
+    }
+  }
+
+  /// Detonate a bomb barrel: blast visual + shake, and damage the
+  /// player if they're inside the blast radius. The shield absorbs the
+  /// blast; otherwise the player loses one life.
+  void _explodeBarrel(BombBarrel barrel) {
+    barrel.isVisible = false;
+
+    final blastX = barrel.x + barrel.width / 2;
+    final blastY = barrel.y + barrel.height / 2;
+    final radius = GameConfig.bombExplosionRadius;
+
+    // Big orange blast + shockwave ring + shake.
+    explosionEffects.add(ExplosionEffect(
+      x: blastX,
+      y: blastY,
+      particleCount: 18,
+      duration: 55,
+      colors: [Colors.orange, Colors.red, Colors.yellow, Colors.deepOrange],
+    ));
+    hitEffects.add(HitEffect(
+      x: blastX,
+      y: blastY,
+      color: Colors.orange,
+      size: radius, // expanding glow approximates the blast radius
+    ));
+    callbacks.onExplosion();
+    callbacks.onShake(0.5);
+
+    // Damage the player if within the blast radius.
+    final px = player.x + player.width / 2;
+    final py = player.y + player.height / 2;
+    final dist = sqrt((px - blastX) * (px - blastX) + (py - blastY) * (py - blastY));
+    if (dist <= radius) {
+      handlePlayerHit();
+    }
+  }
+
+  /// Serpent Volley: 7 bullets in a V formation, all moving straight
+  /// down at the same speed. The center bullet is lowest (reaches the
+  /// player first) and each symmetric pair above it is level with its
+  /// partner — so the wall snakes toward the player instead of arriving
+  /// as one flat line. Horizontal offsets spread the V across the
+  /// muzzle so the bullets never stack into a single column.
+  void _fireSerpentVolley() {
+    final count = GameConfig.serpentBulletCount;
+    final verticalGap = GameConfig.serpentBulletGap;
+    const horizontalGap = 24.0;
+    final speed = GameConfig.serpentBulletSpeed;
+
+    for (int i = 0; i < count; i++) {
+      // Rows above the center bullet: 3,2,1,0,1,2,3 for 7 bullets —
+      // bullet 4 lowest, bullets 1/7 highest, exactly per the spec.
+      final rowFromCenter = (i - count ~/ 2).abs();
+      enemyBullets.add(EnemyBullet(
+        x: _bossMuzzleX - 5 + (i - count ~/ 2) * horizontalGap,
+        y: _bossMuzzleY - rowFromCenter * verticalGap,
+        width: 10,
+        height: 15,
+        speedY: speed,
       ));
     }
   }
@@ -1106,6 +1207,7 @@ class GameController {
     powerUps.removeWhere((p) => !p.isVisible);
     enemies.removeWhere((e) => !e.isVisible);
     enemyBullets.removeWhere((b) => !b.isVisible);
+    bombBarrels.removeWhere((b) => !b.isVisible);
     laserBeams.removeWhere((l) => !l.isVisible);
     floatingTexts.removeWhere((t) => !t.isVisible);
   }
