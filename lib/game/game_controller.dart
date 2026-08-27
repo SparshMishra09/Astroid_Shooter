@@ -431,32 +431,34 @@ class GameController {
     ));
   }
 
-  /// Penta shot: 5 bullets in a Λ formation ALL traveling straight up
-  /// at the same speed — the center bullet is highest (the tip) and two
-  /// level pairs sit slightly lower/beside it, like an upside-down V.
-  /// Zero horizontal velocity, so the formation stays locked together
-  /// as one clustered wall all the way up — nothing spreads out.
+  /// Penta shot: 5 bullets in a "^" formation ALL traveling straight up
+  /// at the same speed — the center bullet is the highest point (the
+  /// tip) and two level pairs sit progressively lower beside it, like a
+  /// caret pointing up. Zero horizontal velocity, so the formation
+  /// stays locked together as one clustered wall all the way up.
   /// The cadence is slower (see GameModeConfig's shared
   /// getShotInterval); rapid fire stacks to speed it back up.
   void firePentaShot() {
     final centerX = player.x + player.width / 2 - bulletWidth / 2;
     final muzzleY = player.y - bulletHeight;
     const horizontalGap = 12.0; // side spacing between formation columns
-    const verticalGap = 10.0; // row height of each Λ step
+    const verticalGap = 10.0; // row height of each "^" step
 
-    // (dx, dy-up) per bullet: tip first, then the two level pairs.
+    // (dx, rows below the tip) per bullet: tip leads at the top, then
+    // the two level pairs stagger down — the caret's shoulders.
+    // Screen y grows DOWNWARD, so larger yOffset = lower on screen.
     final formation = <List<double>>[
-      [0, 0], //        tip (highest)
-      [-horizontalGap, verticalGap], // pair 1 left
+      [0, 0], //   tip — highest, leads the cluster
+      [-horizontalGap, verticalGap], // pair 1 left (one row below tip)
       [horizontalGap, verticalGap], // pair 1 right
-      [-horizontalGap * 2, verticalGap * 2], // pair 2 left
+      [-horizontalGap * 2, verticalGap * 2], // pair 2 left (two rows below)
       [horizontalGap * 2, verticalGap * 2], // pair 2 right
     ];
 
     for (final pos in formation) {
       bullets.add(Bullet(
         x: centerX + pos[0],
-        y: muzzleY - pos[1],
+        y: muzzleY + pos[1],
         width: bulletWidth,
         height: bulletHeight,
         speedY: bulletSpeed,
