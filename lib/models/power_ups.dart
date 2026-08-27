@@ -39,6 +39,10 @@ class PowerUp extends GameObject {
         return Palette.tripleShot;
       case PowerUpType.laserBeam:
         return Palette.laserBeam;
+      case PowerUpType.pentaShot:
+        return Palette.pentaShot;
+      case PowerUpType.wingDrones:
+        return Palette.wingDrones;
     }
   }
 
@@ -52,6 +56,10 @@ class PowerUp extends GameObject {
         return Icons.scatter_plot;
       case PowerUpType.laserBeam:
         return Icons.flash_on;
+      case PowerUpType.pentaShot:
+        return Icons.filter_5;
+      case PowerUpType.wingDrones:
+        return Icons.people_alt;
     }
   }
 
@@ -113,6 +121,10 @@ class ActivePowerUp {
         return GameConfig.tripleShotDuration;
       case PowerUpType.laserBeam:
         return GameConfig.laserBeamDuration;
+      case PowerUpType.pentaShot:
+        return GameConfig.pentaShotDuration;
+      case PowerUpType.wingDrones:
+        return GameConfig.wingDronesDuration;
     }
   }
 
@@ -127,6 +139,10 @@ class ActivePowerUp {
         return 'Triple Shot!';
       case PowerUpType.laserBeam:
         return 'Laser Beam!';
+      case PowerUpType.pentaShot:
+        return 'Penta Shot!';
+      case PowerUpType.wingDrones:
+        return 'Wing Drones!';
     }
   }
 }

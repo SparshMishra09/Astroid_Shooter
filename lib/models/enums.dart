@@ -7,12 +7,20 @@ enum GameMode {
   bossRush,
 }
 
-/// The four temporary power-ups that can drop from destroyed entities.
+/// The temporary power-ups that can drop from destroyed entities.
 enum PowerUpType {
   shield,
   rapidFire,
   tripleShot,
   laserBeam,
+
+  /// 5 bullets in a V spread; slightly slower cadence. Mutually
+  /// exclusive with [tripleShot] (the most recently collected wins).
+  pentaShot,
+
+  /// Two invulnerable companion ships flank the player and fire rapid
+  /// shots for the duration. Only the player takes damage / collects.
+  wingDrones,
 }
 
 /// Enemy classification used for spawning probability tables and rendering.

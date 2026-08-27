@@ -3,7 +3,6 @@ import 'game_mode.dart';
 import '../models/enums.dart';
 import '../models/boss.dart';
 import '../models/game_state.dart';
-import '../models/power_ups.dart';
 import '../config/game_config.dart';
 
 /// Boss Rush: no asteroids, no waves — an endless gauntlet of bosses.
@@ -60,6 +59,8 @@ class BossRushMode extends GameModeConfig {
         PowerUpType.rapidFire: 1,
         PowerUpType.tripleShot: 1,
         PowerUpType.laserBeam: GameConfig.bossRushLaserPowerUpWeight,
+        PowerUpType.pentaShot: 1,
+        PowerUpType.wingDrones: 1,
       };
 
   @override
@@ -71,14 +72,8 @@ class BossRushMode extends GameModeConfig {
     return max(GameConfig.bossRushPowerUpMinInterval, interval);
   }
 
-  @override
-  int getShotInterval(GameState state, Map<PowerUpType, ActivePowerUp> active) {
-    final rapid = active[PowerUpType.rapidFire];
-    if (rapid != null && rapid.isActive) {
-      return GameConfig.shotInterval ~/ GameConfig.rapidFireDivisor;
-    }
-    return GameConfig.shotInterval;
-  }
+  // getShotInterval: inherited shared implementation (rapid fire halves
+  // the cadence, penta shot slows it, both stack).
 
   // Asteroids never spawn in this mode; values are safe placeholders.
   @override

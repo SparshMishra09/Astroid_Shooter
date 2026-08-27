@@ -7,6 +7,10 @@ class Bullet extends GameObject {
   double speedY;
   double speedX;
 
+  /// True when fired by a wing drone — drone bullets hit enemies but
+  /// never count as the player's shot for combo miss tracking.
+  final bool fromDrone;
+
   Bullet({
     required double x,
     required double y,
@@ -14,6 +18,7 @@ class Bullet extends GameObject {
     required double height,
     required this.speedY,
     this.speedX = 0,
+    this.fromDrone = false,
   }) : super(x: x, y: y, width: width, height: height);
 
   void update([double screenWidth = 1000]) {
@@ -62,15 +67,17 @@ class LaserBeam extends GameObject {
   }
 }
 
-/// Bomb barrel dropped by the Demolition Titan boss. Falls while its
-/// fuse burns down, then detonates in a blast radius (the controller
-/// checks player distance). Also detonates early on player contact.
+/// Bomb barrel dropped by the Demolition Titan boss. Falls toward the
+/// player's level and detonates when it gets there (or early on player
+/// contact) — the blast radius is what the player must dodge.
 class BombBarrel extends GameObject {
   double speedY;
   double rotationSpeed;
   double rotationAngle;
-  int fuseTimer;
-  final int maxFuseTime;
+  final double spawnY;
+
+  /// Y coordinate at which the barrel detonates (the player's level).
+  final double detonationY;
 
   BombBarrel({
     required double x,
@@ -78,9 +85,8 @@ class BombBarrel extends GameObject {
     double width = GameConfig.bombBarrelWidth,
     double height = GameConfig.bombBarrelHeight,
     this.speedY = GameConfig.bombBarrelSpeed,
-    required int fuseTime,
-  })  : fuseTimer = fuseTime,
-        maxFuseTime = fuseTime,
+    required this.detonationY,
+  })  : spawnY = y,
         rotationAngle = 0,
         rotationSpeed = math.Random().nextBool() ? 0.06 : -0.06,
         super(x: x, y: y, width: width, height: height);
@@ -88,15 +94,15 @@ class BombBarrel extends GameObject {
   void update(double screenHeight) {
     y += speedY;
     rotationAngle += rotationSpeed;
-    fuseTimer--;
     if (y > screenHeight) isVisible = false;
   }
 
-  /// 1 = fuse just lit, 0 = about to blow. Drives the warning glow.
-  double get fuseProgress =>
-      (fuseTimer / maxFuseTime.toDouble()).clamp(0.0, 1.0);
+  /// Detonates once the barrel reaches the player's level.
+  bool get shouldExplode => y + height >= detonationY;
 
-  bool get isExploded => fuseTimer <= 0;
+  /// 0 = just dropped, 1 = about to blow. Drives the warning glow.
+  double get fallProgress =>
+      ((y - spawnY) / (detonationY - spawnY)).clamp(0.0, 1.0);
 }
 
 /// Reusable structure for tracking a short-lived muzzle/engine flash.

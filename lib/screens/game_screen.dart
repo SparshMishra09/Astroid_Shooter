@@ -326,6 +326,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                         trailPoints: const [],
                       ),
 
+                      // Wing drones (flank the player, rapid fire)
+                      for (final pos in c.wingDronePositions)
+                        WingDroneWidget(
+                          x: pos.dx,
+                          y: pos.dy,
+                          size: GameConfig.droneSize,
+                          frameCount: c.frameCount,
+                        ),
+
                       // Asteroids
                       for (var a in c.asteroids) AsteroidWidget(asteroid: a),
 

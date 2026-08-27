@@ -67,6 +67,12 @@ class Palette {
   static const Color rapidFire = Colors.red;
   static const Color tripleShot = Colors.green;
   static const Color laserBeam = Colors.purple;
+  static const Color pentaShot = Colors.tealAccent;
+  static const Color wingDrones = Colors.lightGreenAccent;
+
+  // --- Wing drones ---
+  static const Color droneHull = Colors.cyanAccent;
+  static const Color droneEngine = Colors.cyan;
 
   // --- UI ---
   static const Color astridText = Colors.amber;

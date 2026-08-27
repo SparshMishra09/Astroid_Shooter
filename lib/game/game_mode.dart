@@ -2,6 +2,7 @@ import '../models/enums.dart';
 import '../models/boss.dart';
 import '../models/game_state.dart';
 import '../models/power_ups.dart';
+import '../config/game_config.dart';
 
 /// Strategy interface that defines how a game mode behaves.
 ///
@@ -53,13 +54,30 @@ abstract class GameModeConfig {
         PowerUpType.rapidFire: 1,
         PowerUpType.tripleShot: 1,
         PowerUpType.laserBeam: 1,
+        PowerUpType.pentaShot: 1,
+        PowerUpType.wingDrones: 1,
       };
+
+  /// Frames between player shots, factoring in active power-ups.
+  ///
+  /// Shared by all modes: rapid fire halves the interval, penta shot's
+  /// heavier volley slows the cadence — and both stack (rapid penta =
+  /// halved slow cadence).
+  int getShotInterval(GameState state, Map<PowerUpType, ActivePowerUp> active) {
+    var interval = GameConfig.shotInterval;
+    final penta = active[PowerUpType.pentaShot];
+    if (penta != null && penta.isActive) {
+      interval = (interval * GameConfig.pentaShotRateMultiplier).round();
+    }
+    final rapid = active[PowerUpType.rapidFire];
+    if (rapid != null && rapid.isActive) {
+      interval = interval ~/ GameConfig.rapidFireDivisor;
+    }
+    return interval;
+  }
 
   /// Frames between random power-up spawns (when enabled).
   int getPowerUpSpawnInterval(GameState state);
-
-  /// Frames between player shots, factoring in active power-ups.
-  int getShotInterval(GameState state, Map<PowerUpType, ActivePowerUp> active);
 
   /// Frames between normal-asteroid spawns for the current wave.
   int getAsteroidSpawnRate(GameState state);

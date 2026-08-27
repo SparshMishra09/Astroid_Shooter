@@ -439,8 +439,9 @@ class BossLaserBeamWidget extends StatelessWidget {
 // ============================================================
 
 /// Bomb barrel dropped by the Demolition Titan: a spinning metal drum
-/// with hazard stripes and a fuse that blinks faster as detonation
-/// nears, ending in a constant red glow in the final moments.
+/// with hazard stripes and a warning light that blinks faster as it
+/// falls toward the player's level, going solid red right before the
+/// blast.
 class BombBarrelWidget extends StatelessWidget {
   const BombBarrelWidget({super.key, required this.barrel, required this.frameCount});
   final BombBarrel barrel;
@@ -450,11 +451,11 @@ class BombBarrelWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!barrel.isVisible) return const SizedBox.shrink();
 
-    final fuse = barrel.fuseProgress; // 1 = just lit .. 0 = about to blow
-    final critical = fuse < 0.35;
+    final fall = barrel.fallProgress; // 0 = dropped .. 1 = at player level
+    final critical = fall > 0.75;
 
-    // Blink rate accelerates as the fuse burns down.
-    final blinkPeriod = critical ? 4 : (fuse < 0.7 ? 8 : 14);
+    // Blink rate accelerates as the barrel closes on its target line.
+    final blinkPeriod = critical ? 4 : (fall > 0.5 ? 8 : 14);
     final blinkOn = (frameCount % blinkPeriod) < (blinkPeriod ~/ 2);
 
     final warningColor = critical ? Colors.red : Colors.orange;
@@ -500,7 +501,7 @@ class BombBarrelWidget extends StatelessWidget {
                     ),
                 ],
               ),
-              // Fuse light — blinks, then solid red when critical
+              // Warning light — blinks, then solid red near detonation
               Container(
                 width: 8,
                 height: 8,
@@ -524,6 +525,126 @@ class BombBarrelWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A wing drone: a small cyan companion ship flanking the player,
+/// with a bobbing hover and its own engine glow. Rendered above the
+/// effects layer but below HUD.
+class WingDroneWidget extends StatelessWidget {
+  const WingDroneWidget({
+    super.key,
+    required this.x,
+    required this.y,
+    required this.size,
+    required this.frameCount,
+  });
+
+  final double x;
+  final double y;
+  final double size;
+  final int frameCount;
+
+  @override
+  Widget build(BuildContext context) {
+    // Gentle hover bob, phase-shifted per drone via x so the pair
+    // doesn't bob in unison.
+    final bob = sin((frameCount + x) * 0.12) * 3;
+    final enginePulse = 0.6 + 0.4 * sin((frameCount + x) * 0.4);
+
+    return Positioned(
+      left: x - size / 2,
+      top: y - size / 2 + bob,
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          // Engine glow beneath
+          Positioned(
+            bottom: -4,
+            child: Container(
+              width: size * 0.5,
+              height: size * 0.35,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Palette.droneEngine.withOpacity(0.9 * enginePulse),
+                    Palette.droneEngine.withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Hull — a small dart
+          CustomPaint(
+            size: Size(size, size),
+            painter: _WingDronePainter(frameCount: frameCount),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Miniature hull for a wing drone: a compact cyan dart with a lit
+/// cockpit dot and thin winglets.
+class _WingDronePainter extends CustomPainter {
+  _WingDronePainter({required this.frameCount});
+  final int frameCount;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
+    final pulse = 0.5 + 0.5 * sin(frameCount * 0.15);
+
+    // Hull — small dart pointing up.
+    final hull = Path()
+      ..moveTo(cx, h * 0.06)
+      ..lineTo(cx + w * 0.30, h * 0.45)
+      ..lineTo(cx + w * 0.22, h * 0.92)
+      ..lineTo(cx - w * 0.22, h * 0.92)
+      ..lineTo(cx - w * 0.30, h * 0.45)
+      ..close();
+    canvas.drawPath(
+      hull,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Palette.droneHull.withOpacity(0.95),
+            Palette.droneEngine.withOpacity(0.8),
+          ],
+        ).createShader(Rect.fromLTWH(0, 0, w, h)),
+    );
+    canvas.drawPath(
+      hull,
+      Paint()
+        ..color = Colors.white.withOpacity(0.7)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // Winglets.
+    final wingPaint = Paint()..color = Palette.droneHull.withOpacity(0.85);
+    canvas.drawLine(Offset(cx - w * 0.28, h * 0.55), Offset(cx - w * 0.46, h * 0.75), wingPaint);
+    canvas.drawLine(Offset(cx + w * 0.28, h * 0.55), Offset(cx + w * 0.46, h * 0.75), wingPaint);
+
+    // Cockpit light.
+    canvas.drawCircle(
+      Offset(cx, h * 0.38),
+      w * 0.09,
+      Paint()..color = Colors.white.withOpacity(0.7 + 0.3 * pulse),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _WingDronePainter old) =>
+      old.frameCount != frameCount;
 }
 
 /// Player bullet — approved SVG asset.

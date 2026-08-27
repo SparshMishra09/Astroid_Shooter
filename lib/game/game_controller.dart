@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' show Offset;
 import 'package:flutter/material.dart' show Colors;
 import '../config/game_config.dart';
 import '../models/enums.dart';
@@ -130,6 +131,18 @@ class GameController {
   /// classic where the kill threshold gates spawns instead).
   int bossRespawnCooldown = 0;
 
+  // --- Wing drones (wingDrones power-up) ---
+  /// x-offset of each drone from the player's center. Two entries =
+  /// both drones active; an empty list = none.
+  ///
+  /// Drones are invulnerable, don't collect anything, and fire rapid
+  /// shots regardless of which other power-ups are active.
+  List<double> wingDrones = [];
+
+  /// Frame counters for each drone's next shot (parallel to
+  /// [wingDrones]).
+  List<int> wingDroneShotTimers = [];
+
   // --- Combo flash tracking (UI reads these) ---
   double? previousComboMultiplier;
   int comboFlashTimer = 0;
@@ -186,6 +199,8 @@ class GameController {
     comboFlashTimer = 0;
     bossesDefeated = 0;
     bossRespawnCooldown = config.initialBossDelay;
+    wingDrones.clear();
+    wingDroneShotTimers.clear();
   }
 
   void setScreenSize(double width, double height) {
@@ -258,6 +273,8 @@ class GameController {
 
     player.update();
 
+    updateWingDrones();
+
     for (var asteroid in asteroids) {
       asteroid.update(screenHeight);
     }
@@ -296,13 +313,74 @@ class GameController {
   }
 
   // =========================================================================
+  //  WING DRONES
+  // =========================================================================
+
+  /// Drones flank the player (slightly above, offset left/right) and
+  /// fire rapid shots on their own cadence. They are invulnerable,
+  /// never collect power-ups, and their fire rate is fixed — no other
+  /// power-up affects them.
+  void updateWingDrones() {
+    if (wingDrones.isEmpty) return;
+
+    final playerCenterX = player.x + player.width / 2;
+
+    for (int i = 0; i < wingDrones.length; i++) {
+      // Smoothly track the player horizontally (a little lag so the
+      // drones feel like companions, not rigid attachments).
+      // wingDrones[i] holds the current offset; ease toward the target.
+      final target = i == 0 ? -GameConfig.droneOffsetX : GameConfig.droneOffsetX;
+      wingDrones[i] += (target - wingDrones[i]) * 0.2;
+
+      // Fire on the drone's own rapid cadence.
+      wingDroneShotTimers[i]--;
+      if (wingDroneShotTimers[i] <= 0) {
+        wingDroneShotTimers[i] = GameConfig.droneShootInterval;
+        final dx = playerCenterX + wingDrones[i] - bulletWidth / 2;
+        final dy = player.y - bulletHeight + 6; // slightly below the player's nose
+        bullets.add(Bullet(
+          x: dx,
+          y: dy,
+          width: bulletWidth,
+          height: bulletHeight,
+          speedY: bulletSpeed,
+          fromDrone: true,
+        ));
+        muzzleFlashes.add(Flash(
+          x: dx,
+          y: dy,
+          size: bulletWidth * 1.3,
+          lifeTimer: 4,
+          isUpward: true,
+        ));
+      }
+    }
+  }
+
+  /// Screen positions of the active wing drones (for rendering).
+  List<Offset> get wingDronePositions {
+    final playerCenterX = player.x + player.width / 2;
+    return [
+      for (final offset in wingDrones)
+        Offset(playerCenterX + offset, player.y + 6),
+    ];
+  }
+
+  // =========================================================================
   //  SHOOTING
   // =========================================================================
 
   void fireBullet() {
     if (gameState.isPaused || gameState.isGameOver) return;
 
+    // Penta shot wins over triple shot: whichever was collected LAST
+    // stays active (activating one cancels the other in
+    // activatePowerUp), so a single check suffices here.
     if (config.powerUpsEnabled &&
+        activePowerUps.containsKey(PowerUpType.pentaShot) &&
+        activePowerUps[PowerUpType.pentaShot]!.isActive) {
+      firePentaShot();
+    } else if (config.powerUpsEnabled &&
         activePowerUps.containsKey(PowerUpType.tripleShot) &&
         activePowerUps[PowerUpType.tripleShot]!.isActive) {
       fireTripleShot();
@@ -353,6 +431,31 @@ class GameController {
     ));
   }
 
+  /// Penta shot: 5 bullets in a V spread — one straight up, two at ±15°,
+  /// two at ±30°. The cadence is slower (see GameModeConfig's shared
+  /// getShotInterval), and rapid fire stacks to speed it back up.
+  void firePentaShot() {
+    for (final angleDeg in const [-30.0, -15.0, 0.0, 15.0, 30.0]) {
+      final angle = angleDeg * (pi / 180);
+      bullets.add(Bullet(
+        x: player.x + player.width / 2 - bulletWidth / 2,
+        y: player.y - bulletHeight,
+        width: bulletWidth,
+        height: bulletHeight,
+        speedY: cos(angle) * bulletSpeed,
+        speedX: sin(angle) * bulletSpeed,
+      ));
+    }
+    muzzleFlashes.add(Flash(
+      x: player.x + player.width / 2 - bulletWidth / 2,
+      y: player.y - bulletHeight,
+      size: bulletWidth * 2.0,
+      lifeTimer: 6,
+      isUpward: true,
+    ));
+    callbacks.onShoot();
+  }
+
   // =========================================================================
   //  ENEMIES
   // =========================================================================
@@ -369,12 +472,13 @@ class GameController {
       bullet.update(screenHeight);
     }
 
-    // Bomb barrels (Demolition Titan): fall while the fuse burns, then
-    // detonate in a blast radius — or detonate early on player contact.
+    // Bomb barrels (Demolition Titan): fall until they reach the
+    // player's level, then detonate in a blast radius — or detonate
+    // early on player contact.
     for (var barrel in bombBarrels) {
       barrel.update(screenHeight);
       if (!barrel.isVisible) continue;
-      if (barrel.isExploded || player.collidesWith(barrel)) {
+      if (barrel.shouldExplode || player.collidesWith(barrel)) {
         _explodeBarrel(barrel);
       }
     }
@@ -590,7 +694,8 @@ class GameController {
   }
 
   /// Demolition Titan: drop 2 bomb barrels per volley — one from each
-  /// wing bay — with randomized fuses so they detonate apart.
+  /// wing bay. Barrels fall until they reach the player's level, then
+  /// detonate there, so the blast is always a threat to dodge.
   void _fireBombBarrels() {
     final boss = activeBoss!;
     final random = Random();
@@ -598,13 +703,14 @@ class GameController {
       final bayX = i == 0
           ? boss.x + boss.width * 0.28
           : boss.x + boss.width * 0.72;
-      final fuse = GameConfig.bombBarrelMinFuse +
-          random.nextInt(
-              GameConfig.bombBarrelMaxFuse - GameConfig.bombBarrelMinFuse + 1);
+      // Detonate at the player's level (with slight per-barrel jitter
+      // so the two blasts don't always land at exactly the same line).
+      final jitter = (random.nextDouble() - 0.5) * 40;
+      final targetY = (player.y + jitter).clamp(boss.y + boss.height + 120.0, screenHeight - 40);
       bombBarrels.add(BombBarrel(
         x: bayX - GameConfig.bombBarrelWidth / 2,
         y: boss.y + boss.height,
-        fuseTime: fuse,
+        detonationY: targetY,
       ));
     }
   }
@@ -915,9 +1021,16 @@ class GameController {
         hasShield = true;
         shieldHitsRemaining = 1;
         break;
-      case PowerUpType.rapidFire:
+      case PowerUpType.pentaShot:
+        // Penta and triple are alternative fire modes — collecting one
+        // cancels the other so the LAST equipped ability stays active.
+        deactivatePowerUp(PowerUpType.tripleShot);
+        break;
       case PowerUpType.tripleShot:
-        break; // handled in getShotInterval / fireBullet
+        deactivatePowerUp(PowerUpType.pentaShot);
+        break;
+      case PowerUpType.rapidFire:
+        break; // handled in getShotInterval
       case PowerUpType.laserBeam:
         laserBeams.add(LaserBeam(
           x: player.x + player.width / 2 - 4,
@@ -926,11 +1039,21 @@ class GameController {
         ));
         callbacks.onLaserActivated();
         break;
+      case PowerUpType.wingDrones:
+        // Deploy the two companion ships (staggered entry: they fly in
+        // from the player's position outward).
+        wingDrones
+          ..clear()
+          ..addAll([0.0, 0.0]);
+        wingDroneShotTimers
+          ..clear()
+          ..addAll([GameConfig.droneShootInterval, GameConfig.droneShootInterval ~/ 2]);
+        break;
     }
   }
 
   void deactivatePowerUp(PowerUpType type) {
-    if (!activePowerUps.containsKey(type)) return;
+    if (type != PowerUpType.shield && !activePowerUps.containsKey(type)) return;
     switch (type) {
       case PowerUpType.shield:
         hasShield = false;
@@ -940,8 +1063,13 @@ class GameController {
       case PowerUpType.laserBeam:
         laserBeams.clear();
         break;
+      case PowerUpType.wingDrones:
+        wingDrones.clear();
+        wingDroneShotTimers.clear();
+        break;
       case PowerUpType.rapidFire:
       case PowerUpType.tripleShot:
+      case PowerUpType.pentaShot:
         break;
     }
     activePowerUps.remove(type);
@@ -1195,9 +1323,10 @@ class GameController {
   // =========================================================================
 
   void cleanupObjects() {
-    // Track misses (bullets that flew off the top without hitting)
+    // Track misses (bullets that flew off the top without hitting).
+    // Wing-drone bullets never touch the player's combo streak.
     for (var bullet in bullets) {
-      if (!bullet.isVisible && bullet.y < -bullet.height) {
+      if (!bullet.isVisible && bullet.y < -bullet.height && !bullet.fromDrone) {
         player.registerMiss();
       }
     }

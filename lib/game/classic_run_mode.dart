@@ -3,7 +3,6 @@ import 'game_mode.dart';
 import '../models/enums.dart';
 import '../models/boss.dart';
 import '../models/game_state.dart';
-import '../models/power_ups.dart';
 import '../config/game_config.dart';
 
 /// The classic endless run: waves that grow harder, full power-up suite,
@@ -47,14 +46,8 @@ class ClassicRunMode extends GameModeConfig {
     return Boss.create(screenWidth, bossSize);
   }
 
-  @override
-  int getShotInterval(GameState state, Map<PowerUpType, ActivePowerUp> active) {
-    final rapid = active[PowerUpType.rapidFire];
-    if (rapid != null && rapid.isActive) {
-      return GameConfig.shotInterval ~/ GameConfig.rapidFireDivisor;
-    }
-    return GameConfig.shotInterval;
-  }
+  // getShotInterval: inherited shared implementation (rapid fire halves
+  // the cadence, penta shot slows it, both stack).
 
   @override
   int getAsteroidSpawnRate(GameState state) {

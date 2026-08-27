@@ -72,11 +72,9 @@ class GameConfig {
   static const int bombardierShootInterval = 120; // 2s between drops
   static const int bombardierBarrelsPerVolley = 2; // barrels per drop
   static const double bombardierSpeed = 1.7;
-  static const double bombBarrelSpeed = 2.2;
+  static const double bombBarrelSpeed = 3.0;
   static const double bombBarrelWidth = 18;
   static const double bombBarrelHeight = 24;
-  static const int bombBarrelMinFuse = 80; // frames until detonation
-  static const int bombBarrelMaxFuse = 140;
   static const double bombExplosionRadius = 85; // blast damage radius
 
   // --- Serpent volley boss (Serpent Volley) ---
@@ -125,6 +123,18 @@ class GameConfig {
   static const int rapidFireDuration = 480; // 8 seconds
   static const int tripleShotDuration = 360; // 6 seconds
   static const int laserBeamDuration = 240; // 4 seconds
+  static const int pentaShotDuration = 420; // 7 seconds
+  static const int wingDronesDuration = 540; // 9 seconds
+
+  // --- Penta shot (V-spread) ---
+  /// Fire-cadence multiplier while penta shot is active — a heavier
+  /// volley, so slightly slower than the normal gun, but not sluggish.
+  static const double pentaShotRateMultiplier = 1.5;
+
+  // --- Wing drones ---
+  static const double droneOffsetX = 42; // flank distance from ship center
+  static const double droneSize = 26;
+  static const int droneShootInterval = 7; // ~8.5 shots/sec (rapid fire)
 
   // --- Power-up drop object ---
   static const double powerUpSize = 30;
