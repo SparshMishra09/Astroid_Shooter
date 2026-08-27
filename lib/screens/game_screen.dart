@@ -204,6 +204,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final score = _controller.gameState.score;
     final waveReached = _controller.gameState.currentWave;
     final asteroidsDestroyed = _controller.asteroidsDestroyed;
+    final bossesDefeated = _controller.bossesDefeated;
 
     _controller.commitHighScore();
     ScoreService.saveHighScore(_controller.gameState.highScore);
@@ -218,6 +219,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         scoreEarned: score,
         waveReached: waveReached,
         asteroidsDestroyed: asteroidsDestroyed,
+        gameMode: widget.gameMode,
+        bossesDefeated: bossesDefeated,
       );
     } catch (e) {
       debugPrint('Submit game results error: $e');

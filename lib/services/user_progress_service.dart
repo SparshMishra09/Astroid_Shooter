@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import '../models/enums.dart';
 import '../models/user_progress.dart';
 
 /// Thrown when a progress operation fails. Carries a user-friendly message.
@@ -20,10 +21,18 @@ class ProgressException implements Exception {
 ///   email: string
 ///   displayName: string
 ///   createdAt: timestamp
-///   astrids: number                    // currency (accumulated)
-///   bestScore: number                  // best single-game score
-///   highestWave: number                // highest wave reached in one game
-///   totalAsteroidsDestroyed: number    // total kills across all games
+///   astrids: number                      // currency (accumulated, ALL modes)
+///   // Legacy pre-mode-split fields — all historical data was Classic:
+///   bestScore: number
+///   highestWave: number
+///   totalAsteroidsDestroyed: number
+///   // Per-mode stats (each mode only counts its own games):
+///   classicBestScore: number
+///   classicHighestWave: number
+///   classicAsteroidsDestroyed: number
+///   bossRushBestScore: number
+///   bossRushHighestWave: number          // highest boss number reached
+///   bossRushBossesDefeated: number       // accumulated across games
 /// }
 /// ```
 class UserProgressService {
@@ -68,17 +77,29 @@ class UserProgressService {
 
   /// Submit a completed game's results to Firestore.
   ///
-  /// - [scoreEarned]: astrids earned this game (added to currency balance).
-  /// - [waveReached]: the wave the player was on when the game ended.
-  /// - [asteroidsDestroyed]: number of asteroids/enemies destroyed this game.
+  /// - [scoreEarned]: astrids earned this game (added to the currency
+  ///   balance regardless of mode).
+  /// - [waveReached]: the wave (Classic) or boss number (Boss Rush) the
+  ///   player was on when the game ended.
+  /// - [asteroidsDestroyed]: asteroids/enemies destroyed this game
+  ///   (Classic Run only counts these).
+  /// - [bossesDefeated]: bosses killed this game (Boss Rush only).
+  /// - [gameMode]: which mode the game was played in — decides which
+  ///   per-mode stats this run updates.
   ///
   /// Uses a transaction so the read-modify-write is atomic (prevents
   /// lost updates if two games finish simultaneously, e.g. on two
   /// devices).
+  ///
+  /// Legacy docs (written before the mode split) are migrated in the
+  /// same transaction: their flat stats carry over as Classic stats
+  /// before this run is applied.
   Future<void> submitGameResult({
     required int scoreEarned,
     required int waveReached,
     required int asteroidsDestroyed,
+    required GameMode gameMode,
+    int bossesDefeated = 0,
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -95,6 +116,12 @@ class UserProgressService {
         int currentBest = 0;
         int currentHighestWave = 0;
         int currentTotalDestroyed = 0;
+        int classicBest = 0;
+        int classicHighestWave = 0;
+        int classicDestroyed = 0;
+        int rushBest = 0;
+        int rushHighestWave = 0;
+        int rushBosses = 0;
         String displayName = user.displayName ?? 'Pilot';
         String email = user.email ?? '';
 
@@ -103,17 +130,64 @@ class UserProgressService {
           currentAstrids = UserProgress.toInt(data['astrids']);
           currentBest = UserProgress.toInt(data['bestScore']);
           currentHighestWave = UserProgress.toInt(data['highestWave']);
-          currentTotalDestroyed = UserProgress.toInt(data['totalAsteroidsDestroyed']);
+          currentTotalDestroyed =
+              UserProgress.toInt(data['totalAsteroidsDestroyed']);
           displayName = (data['displayName'] as String?) ?? displayName;
           email = (data['email'] as String?) ?? email;
+
+          // Migrate legacy docs: pre-split data was all Classic Run, so
+          // flat stats seed the Classic fields on first touch.
+          if (data.containsKey('classicBestScore')) {
+            classicBest = UserProgress.toInt(data['classicBestScore']);
+            classicHighestWave =
+                UserProgress.toInt(data['classicHighestWave']);
+            classicDestroyed =
+                UserProgress.toInt(data['classicAsteroidsDestroyed']);
+          } else {
+            classicBest = currentBest;
+            classicHighestWave = currentHighestWave;
+            classicDestroyed = currentTotalDestroyed;
+          }
+          rushBest = UserProgress.toInt(data['bossRushBestScore']);
+          rushHighestWave = UserProgress.toInt(data['bossRushHighestWave']);
+          rushBosses = UserProgress.toInt(data['bossRushBossesDefeated']);
+        }
+
+        // Legacy flat fields track the global best across modes so old
+        // readers keep working; the per-mode leaderboards use the
+        // per-mode fields below.
+        if (scoreEarned > currentBest) currentBest = scoreEarned;
+        if (waveReached > currentHighestWave) {
+          currentHighestWave = waveReached;
+        }
+        currentTotalDestroyed += asteroidsDestroyed;
+
+        switch (gameMode) {
+          case GameMode.classicRun:
+            if (scoreEarned > classicBest) classicBest = scoreEarned;
+            if (waveReached > classicHighestWave) {
+              classicHighestWave = waveReached;
+            }
+            classicDestroyed += asteroidsDestroyed;
+            break;
+          case GameMode.bossRush:
+            if (scoreEarned > rushBest) rushBest = scoreEarned;
+            if (waveReached > rushHighestWave) rushHighestWave = waveReached;
+            rushBosses += bossesDefeated;
+            break;
         }
 
         tx.set(docRef, {
           'astrids': currentAstrids + scoreEarned,
-          'bestScore': scoreEarned > currentBest ? scoreEarned : currentBest,
-          'highestWave':
-              waveReached > currentHighestWave ? waveReached : currentHighestWave,
-          'totalAsteroidsDestroyed': currentTotalDestroyed + asteroidsDestroyed,
+          'bestScore': currentBest,
+          'highestWave': currentHighestWave,
+          'totalAsteroidsDestroyed': currentTotalDestroyed,
+          'classicBestScore': classicBest,
+          'classicHighestWave': classicHighestWave,
+          'classicAsteroidsDestroyed': classicDestroyed,
+          'bossRushBestScore': rushBest,
+          'bossRushHighestWave': rushHighestWave,
+          'bossRushBossesDefeated': rushBosses,
           'displayName': displayName,
           'email': email,
           if (!snapshot.exists) 'createdAt': FieldValue.serverTimestamp(),

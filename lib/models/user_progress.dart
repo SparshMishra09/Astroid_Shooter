@@ -4,21 +4,40 @@
 /// devices — distinct from the per-run [GameState] which resets each
 /// game.
 ///
-/// Fields:
-/// - [astrids]: currency balance (accumulated across all games, for
-///   the future shop). Each completed game adds its score to this.
-/// - [bestScore]: highest single-game score ever achieved.
-/// - [highestWave]: highest wave reached in a single game.
-/// - [totalAsteroidsDestroyed]: total asteroids/enemies destroyed
-///   across all games (progress metric shown on the leaderboard).
+/// Global fields:
+/// - [astrids]: currency balance (accumulated across all games in ALL
+///   modes, for the future shop). Each completed game adds its score.
+///
+/// Legacy fields ([bestScore], [highestWave], [totalAsteroidsDestroyed])
+/// are the pre-mode-split stats. All historical data was Classic Run,
+/// so they double as the Classic fallback when the per-mode fields are
+/// missing.
+///
+/// Per-mode fields (each mode only counts games played in that mode):
+/// - Classic Run: [classicBestScore], [classicHighestWave],
+///   [classicAsteroidsDestroyed].
+/// - Boss Rush: [bossRushBestScore], [bossRushHighestWave] (highest
+///   boss number reached), [bossRushBossesDefeated] (accumulated).
 class UserProgress {
   final String uid;
   final String displayName;
   final String email;
   final int astrids;
+
+  // Legacy / global-best fields
   final int bestScore;
   final int highestWave;
   final int totalAsteroidsDestroyed;
+
+  // Classic Run
+  final int classicBestScore;
+  final int classicHighestWave;
+  final int classicAsteroidsDestroyed;
+
+  // Boss Rush
+  final int bossRushBestScore;
+  final int bossRushHighestWave;
+  final int bossRushBossesDefeated;
 
   const UserProgress({
     required this.uid,
@@ -28,18 +47,44 @@ class UserProgress {
     required this.bestScore,
     required this.highestWave,
     required this.totalAsteroidsDestroyed,
+    required this.classicBestScore,
+    required this.classicHighestWave,
+    required this.classicAsteroidsDestroyed,
+    required this.bossRushBestScore,
+    required this.bossRushHighestWave,
+    required this.bossRushBossesDefeated,
   });
 
   /// Create from a Firestore document.
+  ///
+  /// Docs written before the mode split have only the legacy fields.
+  /// Since every pre-split game was Classic Run, those values carry
+  /// over as the player's Classic stats; Boss Rush starts at zero.
   factory UserProgress.fromDoc(String uid, Map<String, dynamic> data) {
+    final legacyBest = toInt(data['bestScore']);
+    final legacyWave = toInt(data['highestWave']);
+    final legacyDestroyed = toInt(data['totalAsteroidsDestroyed']);
+
+    final hasClassic = data.containsKey('classicBestScore');
+
     return UserProgress(
       uid: uid,
       displayName: (data['displayName'] as String?) ?? 'Pilot',
       email: (data['email'] as String?) ?? '',
       astrids: toInt(data['astrids']),
-      bestScore: toInt(data['bestScore']),
-      highestWave: toInt(data['highestWave']),
-      totalAsteroidsDestroyed: toInt(data['totalAsteroidsDestroyed']),
+      bestScore: legacyBest,
+      highestWave: legacyWave,
+      totalAsteroidsDestroyed: legacyDestroyed,
+      classicBestScore:
+          hasClassic ? toInt(data['classicBestScore']) : legacyBest,
+      classicHighestWave:
+          hasClassic ? toInt(data['classicHighestWave']) : legacyWave,
+      classicAsteroidsDestroyed: hasClassic
+          ? toInt(data['classicAsteroidsDestroyed'])
+          : legacyDestroyed,
+      bossRushBestScore: toInt(data['bossRushBestScore']),
+      bossRushHighestWave: toInt(data['bossRushHighestWave']),
+      bossRushBossesDefeated: toInt(data['bossRushBossesDefeated']),
     );
   }
 
@@ -57,6 +102,12 @@ class UserProgress {
       bestScore: 0,
       highestWave: 0,
       totalAsteroidsDestroyed: 0,
+      classicBestScore: 0,
+      classicHighestWave: 0,
+      classicAsteroidsDestroyed: 0,
+      bossRushBestScore: 0,
+      bossRushHighestWave: 0,
+      bossRushBossesDefeated: 0,
     );
   }
 
@@ -71,6 +122,8 @@ class UserProgress {
 
   @override
   String toString() =>
-      'UserProgress($displayName: astrids=$astrids, best=$bestScore, '
-      'wave=$highestWave, destroyed=$totalAsteroidsDestroyed)';
+      'UserProgress($displayName: astrids=$astrids, classic(best=$classicBestScore, '
+      'wave=$classicHighestWave, destroyed=$classicAsteroidsDestroyed), '
+      'bossRush(best=$bossRushBestScore, wave=$bossRushHighestWave, '
+      'bosses=$bossRushBossesDefeated))';
 }

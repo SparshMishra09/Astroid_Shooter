@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/enums.dart';
 import '../models/user_progress.dart';
 import '../services/user_progress_service.dart';
 
-/// Space-themed leaderboard screen showing top players ranked by the
-/// selected metric. Uses a StreamBuilder so the list updates in real-time
-/// when players finish games.
+/// Space-themed leaderboard: a global board plus one board per game mode.
 ///
-/// Sort categories:
-/// - Best Score (total astrids from best single game)
-/// - Highest Wave (highest wave reached in a single game)
-/// - Total Destroyed (total asteroids destroyed across all games)
+/// Landing view:
+/// - HIGHEST ASTRIDS — total astrids earned across ALL modes (currency).
+/// - Cards for each game mode's leaderboard.
+///
+/// Classic Run board: best score / highest wave / asteroids destroyed
+/// (classic games only).
+///
+/// Boss Rush board: best score / highest boss reached / bosses defeated
+/// (boss rush games only).
+///
+/// All boards are StreamBuilders so they update in real-time when
+/// players finish games.
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
 
@@ -18,21 +25,75 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  /// Which metric to rank by.
-  String _orderBy = 'bestScore';
+/// One sortable metric of a leaderboard board.
+class _Metric {
+  const _Metric(this.field, this.label, this.value);
 
-  String get _orderByLabel {
-    switch (_orderBy) {
-      case 'bestScore':
-        return 'BEST SCORE';
-      case 'highestWave':
-        return 'HIGHEST WAVE';
-      case 'totalAsteroidsDestroyed':
-        return 'TOTAL DESTROYED';
-      default:
-        return 'BEST SCORE';
+  /// Firestore field to order by.
+  final String field;
+
+  /// Chip label shown to the player.
+  final String label;
+
+  /// Formats a player's value for the metric badge in their row.
+  final String Function(UserProgress player) value;
+}
+
+class _LeaderboardScreenState extends State<LeaderboardScreen> {
+  /// null = landing view (global astrids + mode cards).
+  GameMode? _selectedMode;
+  String _orderBy = 'astrids';
+
+  /// Cached so the "your rank" FutureBuilder doesn't refetch on every
+  /// stream emission; reset when the view or metric changes.
+  Future<UserProgress?>? _myProgressFuture;
+
+  List<_Metric> get _metrics {
+    if (_selectedMode == null) {
+      return [
+        _Metric('astrids', 'ASTRIDS', (p) => '${p.astrids}'),
+      ];
     }
+    switch (_selectedMode!) {
+      case GameMode.classicRun:
+        return [
+          _Metric('classicBestScore', 'BEST SCORE', (p) => '${p.classicBestScore}'),
+          _Metric('classicHighestWave', 'HIGHEST WAVE', (p) => 'Wave ${p.classicHighestWave}'),
+          _Metric('classicAsteroidsDestroyed', 'ASTEROIDS DESTROYED', (p) => '${p.classicAsteroidsDestroyed}'),
+        ];
+      case GameMode.bossRush:
+        return [
+          _Metric('bossRushBestScore', 'BEST SCORE', (p) => '${p.bossRushBestScore}'),
+          _Metric('bossRushHighestWave', 'HIGHEST BOSS', (p) => 'Boss ${p.bossRushHighestWave}'),
+          _Metric('bossRushBossesDefeated', 'BOSSES DEFEATED', (p) => '${p.bossRushBossesDefeated}'),
+        ];
+    }
+  }
+
+  _Metric get _metric =>
+      _metrics.firstWhere((m) => m.field == _orderBy, orElse: () => _metrics.first);
+
+  void _openMode(GameMode mode) {
+    setState(() {
+      _selectedMode = mode;
+      _orderBy = _metrics.first.field;
+      _myProgressFuture = null;
+    });
+  }
+
+  void _backToLanding() {
+    setState(() {
+      _selectedMode = null;
+      _orderBy = 'astrids';
+      _myProgressFuture = null;
+    });
+  }
+
+  void _selectMetric(String field) {
+    setState(() {
+      _orderBy = field;
+      _myProgressFuture = null;
+    });
   }
 
   @override
@@ -48,37 +109,142 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              // === Header ===
-              _buildHeader(),
-              // === Sort tabs ===
-              _buildSortTabs(),
-              const SizedBox(height: 8),
-              // === Leaderboard list ===
-              Expanded(child: _buildLeaderboardList()),
-            ],
-          ),
+          child: _selectedMode == null ? _buildLanding() : _buildModeView(),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  // =========================================================================
+  //  LANDING VIEW — global astrids board + game-mode cards
+  // =========================================================================
+
+  Widget _buildLanding() {
+    return Column(
+      children: [
+        _buildHeader(
+          icon: Icons.leaderboard,
+          iconColor: Colors.amber.shade300,
+          title: 'LEADERBOARD',
+          onBack: () => Navigator.of(context).pop(),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              _buildSectionTitle(
+                icon: Icons.stars,
+                color: Colors.amber,
+                title: 'HIGHEST ASTRIDS',
+                subtitle: 'Total astrids earned — every game mode counts',
+              ),
+              const SizedBox(height: 8),
+              // The global board renders directly (no section chips).
+              _buildBoard(limit: 10),
+              const SizedBox(height: 20),
+              _buildDivider('GAME MODES'),
+              const SizedBox(height: 12),
+              _buildModeCard(
+                mode: GameMode.classicRun,
+                icon: Icons.travel_explore,
+                iconColor: Colors.cyan,
+                gradient: const [Color(0xFF0E7490), Color(0xFF155E75)],
+                title: 'CLASSIC RUN',
+                subtitle: 'Best Score · Highest Wave · Asteroids Destroyed',
+              ),
+              const SizedBox(height: 12),
+              _buildModeCard(
+                mode: GameMode.bossRush,
+                icon: Icons.local_fire_department,
+                iconColor: Colors.red,
+                gradient: const [Color(0xFFB91C1C), Color(0xFF7F1D1D)],
+                title: 'BOSS RUSH',
+                subtitle: 'Best Score · Highest Boss · Bosses Defeated',
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =========================================================================
+  //  MODE VIEW — section chips + ranked list
+  // =========================================================================
+
+  Widget _buildModeView() {
+    final isClassic = _selectedMode == GameMode.classicRun;
+    return Column(
+      children: [
+        _buildHeader(
+          icon: isClassic ? Icons.travel_explore : Icons.local_fire_department,
+          iconColor: isClassic ? Colors.cyan : Colors.red,
+          title: isClassic ? 'CLASSIC RUN' : 'BOSS RUSH',
+          onBack: _backToLanding,
+        ),
+        // === Section chips ===
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final m in _metrics) ...[
+                  _buildSortChip(m),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildSectionTitle(
+            icon: Icons.emoji_events,
+            color: isClassic ? Colors.cyan : Colors.red,
+            title: _metric.label,
+            subtitle: isClassic ? 'Classic Run games only' : 'Boss Rush games only',
+          ),
+        ),
+        const SizedBox(height: 8),
+        // === Ranked list ===
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            children: [_buildBoard()],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =========================================================================
+  //  SHARED PIECES
+  // =========================================================================
+
+  Widget _buildHeader({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required VoidCallback onBack,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white70),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: onBack,
           ),
           const SizedBox(width: 8),
-          Icon(Icons.leaderboard, color: Colors.amber.shade300, size: 28),
+          Icon(icon, color: iconColor, size: 28),
           const SizedBox(width: 10),
-          const Text(
-            'LEADERBOARD',
-            style: TextStyle(
+          Text(
+            title,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -90,25 +256,118 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildSortTabs() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          _buildSortChip('bestScore', 'BEST SCORE'),
-          const SizedBox(width: 8),
-          _buildSortChip('highestWave', 'HIGHEST WAVE'),
-          const SizedBox(width: 8),
-          _buildSortChip('totalAsteroidsDestroyed', 'TOTAL DESTROYED'),
+  Widget _buildSectionTitle({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeCard({
+    required GameMode mode,
+    required IconData icon,
+    required Color iconColor,
+    required List<Color> gradient,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradient,
+        ),
+        border: Border.all(color: iconColor.withOpacity(0.5), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: iconColor.withOpacity(0.25), blurRadius: 18, spreadRadius: 1),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openMode(mode),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.08),
+                    border: Border.all(color: iconColor.withOpacity(0.6), width: 2),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: iconColor.withOpacity(0.8), size: 28),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildSortChip(String field, String label) {
-    final isActive = _orderBy == field;
+  Widget _buildSortChip(_Metric metric) {
+    final isActive = _orderBy == metric.field;
     return GestureDetector(
-      onTap: () => setState(() => _orderBy = field),
+      onTap: () => _selectMetric(metric.field),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -120,7 +379,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
         ),
         child: Text(
-          label,
+          metric.label,
           style: TextStyle(
             color: isActive ? Colors.amber : Colors.white54,
             fontSize: 10,
@@ -132,18 +391,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildLeaderboardList() {
+  /// The ranked list for the current view/metric.
+  Widget _buildBoard({int limit = 50}) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final metric = _metric;
 
     return StreamBuilder<List<UserProgress>>(
       stream: UserProgressService.instance.getLeaderboardStream(
-        limit: 50,
-        orderBy: _orderBy,
+        limit: limit,
+        orderBy: metric.field,
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.cyan, strokeWidth: 3),
+          return const SizedBox(
+            height: 200,
+            child: Center(
+              child: CircularProgressIndicator(color: Colors.cyan, strokeWidth: 3),
+            ),
           );
         }
 
@@ -157,17 +421,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           return _buildEmptyState();
         }
 
-        // Find current user's position (they might not be in the top 50)
+        // Find current user's position (they might not be in the top N)
         final myIndex = players.indexWhere((p) => p.uid == currentUid);
 
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          itemCount: players.length + (myIndex == -1 ? 1 : 0),
-          itemBuilder: (context, index) {
-            // If current user isn't in the top 50, show their card at the end
-            if (myIndex == -1 && index == players.length) {
-              return FutureBuilder<UserProgress?>(
-                future: _loadMyProgress(),
+        return Column(
+          children: [
+            for (int i = 0; i < players.length; i++)
+              _buildPlayerRow(
+                players[i],
+                i + 1,
+                isMe: players[i].uid == currentUid,
+                metricValue: metric.value(players[i]),
+              ),
+            if (myIndex == -1)
+              FutureBuilder<UserProgress?>(
+                future: _myProgressFuture ??= _loadMyProgress(),
                 builder: (context, snap) {
                   if (!snap.hasData) return const SizedBox.shrink();
                   return Column(
@@ -175,17 +443,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       const SizedBox(height: 12),
                       _buildDivider('YOUR RANK'),
                       const SizedBox(height: 8),
-                      _buildPlayerRow(snap.data!, -1, isMe: true),
+                      _buildPlayerRow(
+                        snap.data!,
+                        -1,
+                        isMe: true,
+                        metricValue: metric.value(snap.data!),
+                      ),
                     ],
                   );
                 },
-              );
-            }
-
-            final player = players[index];
-            final isMe = player.uid == currentUid;
-            return _buildPlayerRow(player, index + 1, isMe: isMe);
-          },
+              ),
+          ],
         );
       },
     );
@@ -199,7 +467,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
   }
 
-  Widget _buildPlayerRow(UserProgress player, int rank, {required bool isMe}) {
+  Widget _buildPlayerRow(
+    UserProgress player,
+    int rank, {
+    required bool isMe,
+    required String metricValue,
+  }) {
     final initial = player.displayName.isNotEmpty
         ? player.displayName[0].toUpperCase()
         : 'P';
@@ -216,22 +489,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     } else if (rank == 3) {
       rankColor = Colors.orange.shade700;
       rankIcon = Icons.emoji_events;
-    }
-
-    // The metric value to display based on current sort
-    final String metricValue;
-    switch (_orderBy) {
-      case 'bestScore':
-        metricValue = '${player.bestScore}';
-        break;
-      case 'highestWave':
-        metricValue = 'Wave ${player.highestWave}';
-        break;
-      case 'totalAsteroidsDestroyed':
-        metricValue = '${player.totalAsteroidsDestroyed}';
-        break;
-      default:
-        metricValue = '${player.bestScore}';
     }
 
     return Container(
@@ -321,23 +578,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(Icons.stars, size: 11, color: Colors.amber.withOpacity(0.6)),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${player.astrids}',
-                      style: TextStyle(color: Colors.amber.withOpacity(0.7), fontSize: 11),
-                    ),
-                    const SizedBox(width: 10),
-                    Icon(Icons.waves, size: 11, color: Colors.orange.withOpacity(0.6)),
-                    const SizedBox(width: 3),
-                    Text(
-                      'W${player.highestWave}',
-                      style: TextStyle(color: Colors.orange.withOpacity(0.7), fontSize: 11),
-                    ),
-                  ],
-                ),
+                _buildSecondaryStats(player),
               ],
             ),
           ),
@@ -363,6 +604,68 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
+  /// Small flavor stats under each name — the metric badge already shows
+  /// the ranked stat, so these show cross-mode context instead.
+  Widget _buildSecondaryStats(UserProgress player) {
+    final List<Widget> stats = [];
+
+    // Astrids (unless it IS the ranked metric)
+    if (_metric.field != 'astrids') {
+      stats.addAll([
+        Icon(Icons.stars, size: 11, color: Colors.amber.withOpacity(0.6)),
+        const SizedBox(width: 3),
+        Text(
+          '${player.astrids}',
+          style: TextStyle(color: Colors.amber.withOpacity(0.7), fontSize: 11),
+        ),
+        const SizedBox(width: 10),
+      ]);
+    }
+
+    switch (_selectedMode) {
+      case null:
+        // Global view: one stat per mode.
+        stats.addAll([
+          Icon(Icons.waves, size: 11, color: Colors.orange.withOpacity(0.6)),
+          const SizedBox(width: 3),
+          Text(
+            'W${player.classicHighestWave}',
+            style: TextStyle(color: Colors.orange.withOpacity(0.7), fontSize: 11),
+          ),
+          const SizedBox(width: 10),
+          Icon(Icons.local_fire_department, size: 11, color: Colors.red.withOpacity(0.6)),
+          const SizedBox(width: 3),
+          Text(
+            'B${player.bossRushBossesDefeated}',
+            style: TextStyle(color: Colors.red.withOpacity(0.7), fontSize: 11),
+          ),
+        ]);
+        break;
+      case GameMode.classicRun:
+        stats.addAll([
+          Icon(Icons.waves, size: 11, color: Colors.orange.withOpacity(0.6)),
+          const SizedBox(width: 3),
+          Text(
+            'W${player.classicHighestWave}',
+            style: TextStyle(color: Colors.orange.withOpacity(0.7), fontSize: 11),
+          ),
+        ]);
+        break;
+      case GameMode.bossRush:
+        stats.addAll([
+          Icon(Icons.local_fire_department, size: 11, color: Colors.red.withOpacity(0.6)),
+          const SizedBox(width: 3),
+          Text(
+            'B${player.bossRushBossesDefeated}',
+            style: TextStyle(color: Colors.red.withOpacity(0.7), fontSize: 11),
+          ),
+        ]);
+        break;
+    }
+
+    return Row(children: stats);
+  }
+
   Widget _buildDivider(String label) {
     return Row(
       children: [
@@ -385,7 +688,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
+    return Container(
+      height: 200,
+      alignment: Alignment.center,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -406,26 +711,25 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildErrorState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off, size: 48, color: Colors.red.withOpacity(0.4)),
-            const SizedBox(height: 16),
-            const Text(
-              'Could not load leaderboard',
-              style: TextStyle(color: Colors.white54, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Check your internet connection and try again.',
-              style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    return Container(
+      height: 200,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cloud_off, size: 48, color: Colors.red.withOpacity(0.4)),
+          const SizedBox(height: 16),
+          const Text(
+            'Could not load leaderboard',
+            style: TextStyle(color: Colors.white54, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Check your internet connection and try again.',
+            style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
