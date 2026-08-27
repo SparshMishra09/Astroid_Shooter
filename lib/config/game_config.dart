@@ -132,10 +132,11 @@ class GameConfig {
   static const int pentaShotDuration = 420; // 7 seconds
   static const int wingDronesDuration = 540; // 9 seconds
 
-  // --- Penta shot (V-spread) ---
-  /// Fire-cadence multiplier while penta shot is active — a heavier
-  /// volley, so slightly slower than the normal gun, but not sluggish.
-  static const double pentaShotRateMultiplier = 1.5;
+  // --- Penta shot (Λ formation) ---
+  /// Fire-cadence multiplier while penta shot is active — five bullets
+  /// per volley is a big payload, so the gun fires markedly slower
+  /// (~1.6 volleys/sec vs ~4 singles/sec). Rapid fire halves it back.
+  static const double pentaShotRateMultiplier = 2.5;
 
   // --- Wing drones ---
   static const double droneOffsetX = 42; // flank distance from ship center

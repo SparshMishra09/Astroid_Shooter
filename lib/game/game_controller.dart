@@ -431,27 +431,42 @@ class GameController {
     ));
   }
 
-  /// Penta shot: 5 bullets in a tight upward Λ (upside-down V) — one
-  /// straight up and pairs at ±10°/±20°, so every bullet travels
-  /// upward in a wedge instead of scattering. The cadence is slower
-  /// (see GameModeConfig's shared getShotInterval), and rapid fire
-  /// stacks to speed it back up.
+  /// Penta shot: 5 bullets in a Λ formation ALL traveling straight up
+  /// at the same speed — the center bullet is highest (the tip) and two
+  /// level pairs sit slightly lower/beside it, like an upside-down V.
+  /// Zero horizontal velocity, so the formation stays locked together
+  /// as one clustered wall all the way up — nothing spreads out.
+  /// The cadence is slower (see GameModeConfig's shared
+  /// getShotInterval); rapid fire stacks to speed it back up.
   void firePentaShot() {
-    for (final angleDeg in const [-20.0, -10.0, 0.0, 10.0, 20.0]) {
-      final angle = angleDeg * (pi / 180);
+    final centerX = player.x + player.width / 2 - bulletWidth / 2;
+    final muzzleY = player.y - bulletHeight;
+    const horizontalGap = 12.0; // side spacing between formation columns
+    const verticalGap = 10.0; // row height of each Λ step
+
+    // (dx, dy-up) per bullet: tip first, then the two level pairs.
+    final formation = <List<double>>[
+      [0, 0], //        tip (highest)
+      [-horizontalGap, verticalGap], // pair 1 left
+      [horizontalGap, verticalGap], // pair 1 right
+      [-horizontalGap * 2, verticalGap * 2], // pair 2 left
+      [horizontalGap * 2, verticalGap * 2], // pair 2 right
+    ];
+
+    for (final pos in formation) {
       bullets.add(Bullet(
-        x: player.x + player.width / 2 - bulletWidth / 2,
-        y: player.y - bulletHeight,
+        x: centerX + pos[0],
+        y: muzzleY - pos[1],
         width: bulletWidth,
         height: bulletHeight,
-        speedY: cos(angle) * bulletSpeed,
-        speedX: sin(angle) * bulletSpeed,
+        speedY: bulletSpeed,
+        speedX: 0, // straight up — the formation never spreads
       ));
     }
     muzzleFlashes.add(Flash(
-      x: player.x + player.width / 2 - bulletWidth / 2,
-      y: player.y - bulletHeight,
-      size: bulletWidth * 2.0,
+      x: centerX,
+      y: muzzleY,
+      size: bulletWidth * 2.4,
       lifeTimer: 6,
       isUpward: true,
     ));
