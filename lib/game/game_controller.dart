@@ -31,6 +31,12 @@ abstract class GameCallbacks {
 
   /// Trigger a combo-level-up flash.
   void onComboFlash();
+
+  /// The laser beam power-up just activated — heavy haptic.
+  void onLaserActivated();
+
+  /// A boss was just defeated — celebratory haptic.
+  void onBossDefeatedHaptic();
 }
 
 /// No-op callback implementation (used when audio/effects are disabled).
@@ -58,6 +64,10 @@ class NullGameCallbacks implements GameCallbacks {
   void onShake(double intensity) {}
   @override
   void onComboFlash() {}
+  @override
+  void onLaserActivated() {}
+  @override
+  void onBossDefeatedHaptic() {}
 }
 
 /// Owns ALL game logic and mutable state. The screen is a thin view that
@@ -533,6 +543,7 @@ class GameController {
     gameState.score += activeBoss!.scoreValue;
     bossesDefeated++;
     bossRespawnCooldown = config.bossRespawnDelay;
+    callbacks.onBossDefeatedHaptic();
 
     // Big death explosion + shake
     explosionEffects.add(ExplosionEffect(
@@ -681,6 +692,7 @@ class GameController {
           y: 0,
           height: player.y,
         ));
+        callbacks.onLaserActivated();
         break;
     }
   }

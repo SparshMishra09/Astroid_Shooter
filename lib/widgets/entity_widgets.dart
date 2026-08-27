@@ -1,3 +1,4 @@
+import 'dart:math' show sin;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../models/asteroids.dart';
@@ -285,59 +286,172 @@ class EnemyBulletWidget extends StatelessWidget {
   }
 }
 
-/// Laser beam — follows the player x, multi-layer glow.
+/// Laser beam — a multi-layered energy lance following the player x.
+///
+/// Layers (back to front): a wide breathing aura, the glowing beam
+/// body, a white-hot flickering core, bright energy pulses racing from
+/// the ship up the beam, a muzzle orb where the beam emits from the
+/// ship, and an impact flare where it strikes the top of the screen.
 class LaserBeamWidget extends StatelessWidget {
-  const LaserBeamWidget({super.key, required this.laser});
+  const LaserBeamWidget({super.key, required this.laser, required this.frameCount});
   final LaserBeam laser;
+  final int frameCount;
 
   @override
   Widget build(BuildContext context) {
     if (!laser.isVisible) return const SizedBox.shrink();
+
+    final w = laser.width; // beam body width (8)
+    final h = laser.height;
+    final t = frameCount.toDouble();
+
+    // Fast flicker so the beam feels electric and alive.
+    final flicker = 0.7 + 0.3 * (0.5 + 0.5 * sin(t * 0.9));
+    // Slow "breathing" of the aura width.
+    final breathe = 1.0 + 0.3 * sin(t * 0.13);
+
+    // The stack is wider than the beam so the aura and glow have room.
+    final auraWidth = (w * 3.2) * breathe;
+
     return Positioned(
-      left: laser.x,
+      left: laser.x - (auraWidth - w) / 2,
       top: laser.y,
-      width: laser.width + 4,
-      height: laser.height,
+      width: auraWidth,
+      height: h,
       child: Stack(
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.none,
         children: [
-          // Outer glow
+          // --- 1. Wide breathing aura ---
+          Center(
+            child: Container(
+              width: auraWidth,
+              height: h,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Palette.laserOuter.withOpacity(0.05),
+                    Palette.laserOuter.withOpacity(0.22 * flicker),
+                    Palette.laserMain.withOpacity(0.30 * flicker),
+                  ],
+                  stops: const [0.0, 0.35, 1.0],
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+
+          // --- 2. Beam body (purple → pink, edge-glowed) ---
           Container(
-            width: laser.width + 4,
-            height: laser.height,
+            width: w + 6,
+            height: h,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Palette.laserOuter.withOpacity(0.3), Palette.laserMain.withOpacity(0.2)],
+                colors: [
+                  Palette.laserOuter.withOpacity(0.55),
+                  Palette.laserMain.withOpacity(0.75),
+                  Palette.laserMain.withOpacity(0.9),
+                ],
+                stops: const [0.0, 0.5, 1.0],
               ),
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [
+                BoxShadow(
+                  color: Palette.laserOuter.withOpacity(0.55 * flicker),
+                  spreadRadius: 2,
+                  blurRadius: 8,
+                ),
+              ],
             ),
           ),
-          // Main beam
+
+          // --- 3. White-hot flickering core ---
+          Container(
+            width: w - 2,
+            height: h,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withOpacity(0.35 * flicker),
+                  Colors.white.withOpacity(0.75),
+                  Colors.white.withOpacity(0.95 * flicker),
+                ],
+                stops: const [0.0, 0.45, 1.0],
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // --- 4. Energy pulses racing from the ship up the beam ---
+          for (int i = 0; i < 3; i++)
+            Positioned(
+              top: h - ((t * 9 + i * (h + 60) / 3) % (h + 60)),
+              child: Container(
+                width: w * 1.8,
+                height: 14,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withOpacity(0.0),
+                      Colors.white.withOpacity(0.9),
+                      Colors.white.withOpacity(0.0),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(7),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Palette.laserMain.withOpacity(0.8),
+                      spreadRadius: 2,
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // --- 5. Muzzle orb where the beam emits from the ship ---
           Positioned(
-            left: 2,
+            bottom: -6,
             child: Container(
-              width: laser.width,
-              height: laser.height,
+              width: w * 2.4,
+              height: w * 2.4,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Palette.laserOuter.withOpacity(0.9), Palette.laserMain.withOpacity(0.8)],
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white,
+                    Palette.laserMain.withOpacity(0.9 * flicker),
+                    Palette.laserOuter.withOpacity(0.0),
+                  ],
+                  stops: const [0.0, 0.4, 1.0],
                 ),
               ),
             ),
           ),
-          // Inner core
+
+          // --- 6. Impact flare where the beam strikes the screen top ---
           Positioned(
-            left: 3,
+            top: -8,
             child: Container(
-              width: laser.width - 2,
-              height: laser.height,
+              width: w * 3.0,
+              height: w * 1.6,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Palette.laserCore.withOpacity(0.8), Palette.laserMain.withOpacity(0.9)],
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.95),
+                    Palette.laserMain.withOpacity(0.7 * flicker),
+                    Palette.laserOuter.withOpacity(0.0),
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
                 ),
               ),
             ),

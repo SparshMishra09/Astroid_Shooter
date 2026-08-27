@@ -338,7 +338,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
                       // Laser beams
                       if (c.config.powerUpsEnabled)
-                        for (var l in c.laserBeams) LaserBeamWidget(laser: l),
+                        for (var l in c.laserBeams)
+                          LaserBeamWidget(laser: l, frameCount: c.frameCount),
 
                       // Floating text
                       if (c.config.powerUpsEnabled)
@@ -457,5 +458,20 @@ class _ScreenCallbacks implements GameCallbacks {
   @override
   void onComboFlash() {
     _state._comboFlashController.forward(from: 0);
+  }
+
+  @override
+  void onLaserActivated() {
+    // Heavy impact — the laser is the game's flashiest power-up.
+    HapticFeedback.heavyImpact();
+  }
+
+  @override
+  void onBossDefeatedHaptic() {
+    // A triumphant double-tick for a boss kill.
+    HapticFeedback.mediumImpact();
+    Future.delayed(const Duration(milliseconds: 150), () {
+      HapticFeedback.lightImpact();
+    });
   }
 }
