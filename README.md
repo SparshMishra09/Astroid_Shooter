@@ -39,7 +39,7 @@
 
 ## 📋 Overview
 
-**Space Wars** is a vertically-scrolling arcade shooter built with Flutter. The player controls a spaceship at the bottom of the screen, dragging left and right to dodge debris while the ship auto-fires upward. The game features **two game modes** (Classic Run and Boss Rush), a wave-based difficulty curve, **six power-ups** with stacking rules, combo multipliers, and boss battles against **eight distinct dreadnought variants**.
+**Space Wars** is a vertically-scrolling arcade shooter built with Flutter. The player controls a spaceship at the bottom of the screen, dragging left and right to dodge debris while the ship auto-fires upward. The game features **two game modes** (Classic Run and Boss Rush), a wave-based difficulty curve, **six power-ups** with stacking rules, combo multipliers, and boss battles against **nine distinct boss variants**.
 
 Every astrid (in-game currency) you earn is saved to your account via Firebase. Compete against other pilots on the global leaderboard plus per-mode boards — tracked by best score, highest wave/boss, asteroids destroyed, and bosses defeated.
 
@@ -68,7 +68,7 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 | Mode | Description |
 |------|-------------|
 | **Classic Run** | The original endless run — timed waves that grow harder, full enemy mix, a boss dreadnought every 150 kills. Enemy fighters join from wave 3. |
-| **Boss Rush** | No asteroids, no waves — an endless gauntlet of bosses in random order (all 8 variants, equal odds), one at a time with a 10-second breather between kills. Power-ups drop on a timer; the laser is a rare jackpot find (~10% instead of 25%) so it can't trivialize boss fights. |
+| **Boss Rush** | No asteroids, no waves — an endless gauntlet of bosses in random order (all 9 variants, equal odds), one at a time with a 10-second breather between kills. Power-ups drop on a timer; the laser is a rare jackpot find (~10% instead of 25%) so it can't trivialize boss fights. |
 
 ### Enemy Types
 
@@ -91,8 +91,9 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 | **Void Lancer** | 55 | 450 | Freezes to charge (1s telegraph), then fires a vertical instant-kill laser — only an active shield survives it |
 | **Demolition Titan** | 55 | 380 | Drops bomb barrels that fall to the player's level, then detonate in a blast radius |
 | **Serpent Volley** | 50 | 360 | 7 bullets straight down in a V formation — the center arrives first, the wall snakes toward you |
+| **Swarm Lords** | 10 units (2-hit shields) | 400 + 40/unit | Not one hull but ten shielded pods in two rows — each patrols, bobs, and fires aimed bullets; kill all ten to win |
 
-*The last six variants are Boss Rush exclusive.*
+*The last seven variants are Boss Rush exclusive.*
 
 ### Power-Ups
 
@@ -102,7 +103,7 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 | 🔴 **Rapid Fire** | 8 sec | Halves your shot interval — **stacks with Penta Shot** |
 | 🟢 **Triple Shot** | 6 sec | Fires three bullets in a spread |
 | 🟣 **Laser Beam** | 4 sec | Continuous vertical laser beam — rare drop in Boss Rush |
-| 🩵 **Penta Shot** | 7 sec | 5 bullets in a tight upward Λ wedge at a slightly slower cadence — replaces Triple Shot (last-equipped wins), stacks with Rapid Fire |
+| 🩵 **Penta Shot** | 7 sec | 5 bullets in a locked "^" formation traveling straight up as one cluster at a slow cadence — replaces Triple Shot (last-equipped wins), stacks with Rapid Fire |
 | 💚 **Wing Drones** | 9 sec | Two invulnerable companion ships flank you with constant rapid fire — rare drop in both modes |
 
 ### Combo System
@@ -128,7 +129,7 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 - **Drag-to-move** controls with auto-fire — intuitive, one-thumb play
 - **Two game modes** — Classic Run (wave-based) and Boss Rush (endless boss gauntlet)
 - **4 enemy types** with unique behaviors and visuals
-- **8 boss variants** with distinct attack patterns (shield dome, instant-kill laser, bomb barrages, V-formations...)
+- **9 boss variants** with distinct attack patterns (shield domes, instant-kill lasers, bomb barrages, V-formations, a ten-unit swarm...)
 - **6 power-ups** with stacking rules (Rapid Fire + Penta Shot combine; drones/shield/laser run independently)
 - **Combo multiplier** system for skillful play
 - **Boss battles** every 150 kills (Classic) or back-to-back (Boss Rush)
@@ -146,6 +147,7 @@ Every astrid (in-game currency) you earn is saved to your account via Firebase. 
 - **Astrids** — persistent currency accumulated across all games and modes (for future shop)
 - **Global board** — Highest Astrids, across every mode
 - **Per-mode boards** — Classic Run (Best Score / Highest Wave / Asteroids Destroyed) and Boss Rush (Best Score / Highest Boss / Bosses Defeated), each counting only that mode's games
+- **Swipeable sections** — swipe between leaderboard sections or tap the chips; both inputs stay in sync
 - **Real-time updates** — every board refreshes instantly when any player finishes a game
 - **Legacy-friendly** — pre-mode-split stats carry over as Classic Run stats
 
@@ -317,7 +319,7 @@ asteroid_shooter/
 │   ├── game/                              # Game logic (strategy pattern)
 │   │   ├── game_mode.dart                 # Abstract GameModeConfig interface
 │   │   ├── classic_run_mode.dart          # Classic Run implementation
-│   │   ├── boss_rush_mode.dart            # Boss Rush implementation (8-boss pool)
+│   │   ├── boss_rush_mode.dart            # Boss Rush implementation (9-boss pool)
 │   │   ├── game_mode_registry.dart        # Enum → config factory
 │   │   └── game_controller.dart           # ALL game logic (spawn, move, collide, score)
 │   │
@@ -327,6 +329,7 @@ asteroid_shooter/
 │   │   ├── player.dart                    # Player ship + combo system
 │   │   ├── asteroids.dart                 # Asteroid, SmallFastAsteroid, HugeSlowAsteroid
 │   │   ├── enemy_ship.dart                # EnemyShip (evil-twin fighter)
+│   │   ├── swarm_unit.dart                # SwarmUnit (Swarm Lords boss encounter)
 │   │   ├── boss.dart                      # Boss (dreadnought)
 │   │   ├── projectiles.dart               # Bullet, EnemyBullet, LaserBeam
 │   │   ├── power_ups.dart                 # PowerUp + ActivePowerUp
