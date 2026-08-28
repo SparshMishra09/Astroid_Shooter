@@ -84,6 +84,16 @@ class GameConfig {
   static const double serpentBulletSpeed = 3.2;
   static const double serpentBossSpeed = 1.8;
 
+  // --- Swarm Lords boss (Boss Rush) ---
+  static const int swarmUnitCount = 10; // units per encounter
+  static const int swarmUnitShieldHealth = 2; // shield hits per unit
+  static const int swarmUnitHealth = 1; // hull hits after shield breaks
+  static const double swarmUnitSize = 34;
+  static const int swarmUnitShootInterval = 140; // ~2.3s, staggered per unit
+  static const double swarmUnitBulletSpeed = 3.0;
+  static const double swarmUnitSpeed = 1.2; // horizontal patrol
+  static const double swarmHoverY = 150; // descent stops here (bob band)
+
   // --- Boss variant movement ---
   static const double triBeamBossSpeed = 2.0;
   static const double rapidFireBossSpeed = 3.0;

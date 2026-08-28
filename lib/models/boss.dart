@@ -158,6 +158,8 @@ class Boss extends Enemy {
         return 'DEMOLITION TITAN';
       case BossType.serpentVolley:
         return 'SERPENT VOLLEY';
+      case BossType.swarm:
+        return 'SWARM LORDS';
     }
   }
 
@@ -268,6 +270,20 @@ class Boss extends Enemy {
           scoreValue: ScoreValues.bossSerpentVolley,
           shootInterval: GameConfig.serpentShootInterval,
           speedX: GameConfig.serpentBossSpeed,
+        );
+      case BossType.swarm:
+        // The Boss object is only a marker here — the controller
+        // intercepts swarm spawns and deploys 10 SwarmUnits instead.
+        return Boss(
+          x: screenWidth / 2 - bossSize / 2,
+          y: 100,
+          width: bossSize,
+          height: bossSize * 0.8,
+          bossType: type,
+          health: 10,
+          scoreValue: ScoreValues.bossSwarm,
+          shootInterval: 1 << 30, // never fires itself
+          speedX: 0,
         );
     }
   }

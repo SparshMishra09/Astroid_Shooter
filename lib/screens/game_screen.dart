@@ -6,6 +6,7 @@ import '../config/game_config.dart';
 import '../models/enums.dart';
 import '../models/asteroids.dart';
 import '../models/enemy_ship.dart';
+import '../models/swarm_unit.dart';
 import '../services/score_service.dart';
 import '../services/user_progress_service.dart';
 import '../services/audio_service.dart';
@@ -361,6 +362,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                             SmallAsteroidWidget(asteroid: e, frameCount: c.frameCount)
                           else if (e is HugeSlowAsteroid)
                             HugeAsteroidWidget(asteroid: e)
+                          else if (e is SwarmUnit)
+                            SwarmUnitWidget(unit: e, frameCount: c.frameCount)
                           else if (e is EnemyShip)
                             EnemyShipWidget(ship: e, frameCount: c.frameCount),
 

@@ -61,9 +61,10 @@ class ModeSelectionScreen extends StatelessWidget {
                           iconColor: Colors.cyan,
                           gradient: [Color(0xFF0E7490), Color(0xFF155E75)],
                           title: 'CLASSIC RUN',
-                          description: 'Endless waves of asteroids and enemy '
-                              'fighters. Difficulty climbs every wave — the '
-                              'boss dreadnought arrives every 150 kills.',
+                          description: 'The endless voyage. Survive escalating '
+                              'waves of asteroids, fast-moving shards and '
+                              'enemy fighters — and when you hit 150 kills, '
+                              'a dreadnought comes for you.',
                         ),
                         SizedBox(height: 18),
                         _ModeCard(
@@ -72,10 +73,11 @@ class ModeSelectionScreen extends StatelessWidget {
                           iconColor: Colors.red,
                           gradient: [Color(0xFFB91C1C), Color(0xFF7F1D1D)],
                           title: 'BOSS RUSH',
-                          description: 'No asteroids. No waves. One boss '
-                              'after another in random order — tri-beam, '
-                              'rapid-fire, penta-beam and the escort carrier '
-                              'with its fighter minions.',
+                          description: 'Pure combat. Nine boss variants — '
+                              'shielded fortresses, laser lances, bomb '
+                              'barges and the ten-bodied Swarm Lords — '
+                              'thrown at you in random order. How long '
+                              'can you last?',
                         ),
                       ],
                     ),

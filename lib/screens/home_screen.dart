@@ -423,16 +423,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           SizedBox(height: 10),
           Text(
-            '• Drag to move your spaceship\n'
-            '• Your ship fires automatically\n'
-            '• Destroy asteroids & enemies for astrids\n'
-            '• Survive waves to earn bonus astrids\n'
-            '• Collect power-ups: Rapid Fire, Triple Shot, Laser, Shield\n'
-            '• Build combos for bonus astrids\n'
-            '• Face boss dreadnoughts — every 150 kills, or one after\n'
-            '  another in Boss Rush mode!\n\n'
-            'Astrids are saved to your account — spend them in the shop (coming soon!)',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
+            '• Drag to move — your ship fires automatically\n'
+            '• Destroy asteroids & enemies for astrids, chain hits\n'
+            '  for combo multipliers\n'
+            '• Six power-ups: Shield, Rapid Fire, Triple Shot,\n'
+            '  Laser, Penta Shot ("^" barrage) & Wing Drones\n'
+            '• Power-ups stack — Rapid Fire speeds up Penta Shot!\n'
+            '• CLASSIC RUN: survive waves; a boss arrives every 150 kills\n'
+            '• BOSS RUSH: nine boss variants back-to-back — break\n'
+            '  shields, dodge lasers & bombs, scatter the Swarm Lords\n\n'
+            'Every astrid you earn is saved to your account and ranked\n'
+            'on the global + per-mode leaderboards!',
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
           ),
         ],
       ),

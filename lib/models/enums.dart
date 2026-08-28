@@ -34,7 +34,7 @@ enum EnemyType {
 
 /// Boss variants. Each has a distinct attack pattern and energy color.
 ///
-/// Boss Rush spawns all eight in random order; Classic Run only uses
+/// Boss Rush spawns all nine in random order; Classic Run only uses
 /// [triBeam] (the original dreadnought).
 enum BossType {
   /// 3-way bullet spread — the original dreadnought.
@@ -66,4 +66,9 @@ enum BossType {
   /// staggered vertically so the wall snakes toward the player.
   /// Boss Rush exclusive.
   serpentVolley,
+
+  /// Not one ship but ten: a swarm of small shielded units that each
+  /// fire single aimed bullets. The encounter ends when all ten die.
+  /// Boss Rush exclusive.
+  swarm,
 }

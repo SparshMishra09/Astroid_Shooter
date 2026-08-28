@@ -44,9 +44,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   GameMode? _selectedMode;
   String _orderBy = 'astrids';
 
+  /// Drives the swipeable section pages; recreated per mode view.
+  late final PageController _pageController = PageController();
+
   /// Cached so the "your rank" FutureBuilder doesn't refetch on every
   /// stream emission; reset when the view or metric changes.
   Future<UserProgress?>? _myProgressFuture;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   List<_Metric> get _metrics {
     if (_selectedMode == null) {
@@ -79,6 +88,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       _orderBy = _metrics.first.field;
       _myProgressFuture = null;
     });
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
   }
 
   void _backToLanding() {
@@ -94,6 +106,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       _orderBy = field;
       _myProgressFuture = null;
     });
+  }
+
+  /// Chip taps animate the page to the matching section (swipes call
+  /// [_selectMetric] via onPageChanged, so both inputs stay in sync).
+  void _jumpToMetric(String field) {
+    final index = _metrics.indexWhere((m) => m.field == field);
+    if (index >= 0 && _pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override
@@ -140,7 +165,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ),
               const SizedBox(height: 8),
               // The global board renders directly (no section chips).
-              _buildBoard(limit: 10),
+              _buildBoardFor(
+                _Metric('astrids', 'ASTRIDS', (p) => '${p.astrids}'),
+                limit: 10,
+              ),
               const SizedBox(height: 20),
               _buildDivider('GAME MODES'),
               const SizedBox(height: 12),
@@ -175,6 +203,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Widget _buildModeView() {
     final isClassic = _selectedMode == GameMode.classicRun;
+    final metrics = _metrics;
+
     return Column(
       children: [
         _buildHeader(
@@ -183,7 +213,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           title: isClassic ? 'CLASSIC RUN' : 'BOSS RUSH',
           onBack: _backToLanding,
         ),
-        // === Section chips ===
+        // === Section chips (tap OR swipe — both move the page) ===
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SizedBox(
@@ -191,8 +221,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                for (final m in _metrics) ...[
-                  _buildSortChip(m),
+                for (int i = 0; i < metrics.length; i++) ...[
+                  _buildSortChip(metrics[i]),
                   const SizedBox(width: 8),
                 ],
               ],
@@ -200,21 +230,35 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _buildSectionTitle(
-            icon: Icons.emoji_events,
-            color: isClassic ? Colors.cyan : Colors.red,
-            title: _metric.label,
-            subtitle: isClassic ? 'Classic Run games only' : 'Boss Rush games only',
-          ),
-        ),
-        const SizedBox(height: 8),
-        // === Ranked list ===
+        // === Swipeable pages — one per section ===
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            children: [_buildBoard()],
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: metrics.length,
+            onPageChanged: (index) => _selectMetric(metrics[index].field),
+            itemBuilder: (context, index) {
+              final metric = metrics[index];
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildSectionTitle(
+                      icon: Icons.emoji_events,
+                      color: isClassic ? Colors.cyan : Colors.red,
+                      title: metric.label,
+                      subtitle: isClassic ? 'Classic Run games only' : 'Boss Rush games only',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      children: [_buildBoardFor(metric)],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -367,7 +411,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _buildSortChip(_Metric metric) {
     final isActive = _orderBy == metric.field;
     return GestureDetector(
-      onTap: () => _selectMetric(metric.field),
+      onTap: () => _jumpToMetric(metric.field),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -391,10 +435,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  /// The ranked list for the current view/metric.
-  Widget _buildBoard({int limit = 50}) {
+  /// The ranked list for a given metric (the landing view passes the
+  /// global astrids metric; each swipeable page passes its own).
+  Widget _buildBoardFor(_Metric metric, {int limit = 50}) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    final metric = _metric;
 
     return StreamBuilder<List<UserProgress>>(
       stream: UserProgressService.instance.getLeaderboardStream(

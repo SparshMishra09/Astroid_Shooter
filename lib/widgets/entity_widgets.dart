@@ -1,8 +1,9 @@
-import 'dart:math' show sin;
+import 'dart:math' show sin, cos, pi;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../models/asteroids.dart';
 import '../models/enemy_ship.dart';
+import '../models/swarm_unit.dart';
 import '../models/boss.dart';
 import '../models/projectiles.dart';
 import '../models/power_ups.dart';
@@ -171,6 +172,156 @@ class EnemyShipWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One Swarm Lords unit: a small insectoid pod with a pulsing hexagonal
+/// shield ring while shielded, and exposed sparking innards once the
+/// shield breaks.
+class SwarmUnitWidget extends StatelessWidget {
+  const SwarmUnitWidget({super.key, required this.unit, required this.frameCount});
+  final SwarmUnit unit;
+  final int frameCount;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!unit.isVisible) return const SizedBox.shrink();
+    return Positioned(
+      left: unit.x,
+      top: unit.y,
+      width: unit.width,
+      height: unit.height,
+      child: CustomPaint(
+        size: Size(unit.width, unit.height),
+        painter: _SwarmUnitPainter(
+          hasShield: unit.hasShield,
+          frameCount: frameCount,
+          phase: unit.phase,
+        ),
+      ),
+    );
+  }
+}
+
+class _SwarmUnitPainter extends CustomPainter {
+  _SwarmUnitPainter({
+    required this.hasShield,
+    required this.frameCount,
+    required this.phase,
+  });
+
+  final bool hasShield;
+  final int frameCount;
+  final double phase;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
+    final cy = h / 2;
+    final pulse = 0.5 + 0.5 * sin(frameCount * 0.1 + phase);
+
+    // --- Shield ring (hex) while shielded ---
+    if (hasShield) {
+      final radius = w * 0.72 + pulse * 2;
+      final hex = Path();
+      for (int i = 0; i < 6; i++) {
+        final a = i * pi / 3 - pi / 6;
+        final px = cx + cos(a) * radius;
+        final py = cy + sin(a) * radius;
+        if (i == 0) {
+          hex.moveTo(px, py);
+        } else {
+          hex.lineTo(px, py);
+        }
+      }
+      hex.close();
+
+      canvas.drawPath(
+        hex,
+        Paint()
+          ..color = Colors.cyan.withOpacity(0.08 + 0.06 * pulse)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawPath(
+        hex,
+        Paint()
+          ..color = Colors.cyan.withOpacity(0.5 + 0.4 * pulse)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.8,
+      );
+      // Corner nodes on the hex.
+      for (int i = 0; i < 6; i++) {
+        final a = i * pi / 3 - pi / 6;
+        canvas.drawCircle(
+          Offset(cx + cos(a) * radius, cy + sin(a) * radius),
+          1.8,
+          Paint()..color = Colors.cyan.withOpacity(0.6 + 0.4 * pulse),
+        );
+      }
+    }
+
+    // --- Body: insectoid pod pointing down ---
+    final body = Path()
+      ..moveTo(cx, h * 0.95) // stinger tip
+      ..quadraticBezierTo(cx + w * 0.55, h * 0.55, cx + w * 0.34, h * 0.22)
+      ..quadraticBezierTo(cx, h * 0.02, cx - w * 0.34, h * 0.22)
+      ..quadraticBezierTo(cx - w * 0.55, h * 0.55, cx, h * 0.95)
+      ..close();
+
+    canvas.drawPath(
+      body,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [const Color(0xFF7C3AED), const Color(0xFF4C1D95)],
+        ).createShader(Rect.fromLTWH(0, 0, w, h)),
+    );
+    canvas.drawPath(
+      body,
+      Paint()
+        ..color = Colors.deepPurple.shade900
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Winglets.
+    final wingPaint = Paint()..color = const Color(0xFF9F67FF).withOpacity(0.85);
+    canvas.drawLine(Offset(cx - w * 0.3, h * 0.5), Offset(cx - w * 0.62, h * 0.38), wingPaint);
+    canvas.drawLine(Offset(cx + w * 0.3, h * 0.5), Offset(cx + w * 0.62, h * 0.38), wingPaint);
+
+    // Eye — glows brighter when unshielded (aggressive "exposed" state).
+    canvas.drawCircle(
+      Offset(cx, h * 0.42),
+      w * 0.14,
+      Paint()..color = Colors.redAccent.withOpacity(hasShield ? 0.75 : 1.0),
+    );
+    canvas.drawCircle(
+      Offset(cx, h * 0.42),
+      w * 0.06,
+      Paint()..color = Colors.white.withOpacity(0.8),
+    );
+
+    // Exposed sparking innards once the shield is gone.
+    if (!hasShield) {
+      final sparkPaint = Paint()
+        ..color = Colors.amber.withOpacity(0.5 + 0.5 * pulse)
+        ..strokeWidth = 1.2;
+      for (int i = 0; i < 3; i++) {
+        final a = frameCount * 0.2 + i * 2 * pi / 3;
+        canvas.drawLine(
+          Offset(cx, h * 0.65),
+          Offset(cx + cos(a) * w * 0.22, h * 0.65 + sin(a) * h * 0.18),
+          sparkPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SwarmUnitPainter old) =>
+      old.frameCount != frameCount || old.hasShield != hasShield;
 }
 
 /// Boss dreadnought — CustomPainter redesign + health bar (+ shield bar

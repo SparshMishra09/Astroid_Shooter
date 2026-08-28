@@ -17,4 +17,6 @@ class ScoreValues {
   static const int bossLaserCannon = 450;
   static const int bossBombardier = 380;
   static const int bossSerpentVolley = 360;
+  static const int bossSwarm = 400; // clear bonus (units award their own astrids)
+  static const int swarmUnit = 40;
 }

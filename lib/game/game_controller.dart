@@ -2,10 +2,12 @@ import 'dart:math';
 import 'dart:ui' show Offset;
 import 'package:flutter/material.dart' show Colors;
 import '../config/game_config.dart';
+import '../config/score_values.dart';
 import '../models/enums.dart';
 import '../models/player.dart';
 import '../models/asteroids.dart';
 import '../models/enemy_ship.dart';
+import '../models/swarm_unit.dart';
 import '../models/boss.dart';
 import '../models/projectiles.dart';
 import '../models/power_ups.dart';
@@ -131,6 +133,12 @@ class GameController {
   /// classic where the kill threshold gates spawns instead).
   int bossRespawnCooldown = 0;
 
+  /// The Swarm Lords encounter: instead of one boss, 10 shielded
+  /// SwarmUnits deploy. This counts how many are still alive — while
+  /// > 0 the encounter is "the boss" (spawning is paused, and the run's
+  /// boss counter advances only when the last unit dies).
+  int swarmUnitsAlive = 0;
+
   // --- Wing drones (wingDrones power-up) ---
   /// x-offset of each drone from the player's center. Two entries =
   /// both drones active; an empty list = none.
@@ -199,6 +207,7 @@ class GameController {
     comboFlashTimer = 0;
     bossesDefeated = 0;
     bossRespawnCooldown = config.initialBossDelay;
+    swarmUnitsAlive = 0;
     wingDrones.clear();
     wingDroneShotTimers.clear();
   }
@@ -485,6 +494,9 @@ class GameController {
       if (enemy is EnemyShip && enemy.shouldShoot()) {
         fireEnemyBullet(enemy);
       }
+      if (enemy is SwarmUnit && enemy.shouldShoot()) {
+        _fireSwarmUnitBullet(enemy);
+      }
     }
 
     for (var bullet in enemyBullets) {
@@ -533,6 +545,25 @@ class GameController {
     ));
   }
 
+  /// Swarm unit attack: one bullet aimed directly at the player.
+  void _fireSwarmUnitBullet(SwarmUnit unit) {
+    final mx = unit.x + unit.width / 2;
+    final my = unit.y + unit.height;
+    final dx = (player.x + player.width / 2) - mx;
+    final dy = (player.y + player.height / 2) - my;
+    final len = sqrt(dx * dx + dy * dy);
+    if (len < 1) return;
+    final speed = GameConfig.swarmUnitBulletSpeed;
+    enemyBullets.add(EnemyBullet(
+      x: mx - 5,
+      y: my,
+      width: 10,
+      height: 15,
+      speedY: (dy / len) * speed,
+      speedX: (dx / len) * speed,
+    ));
+  }
+
   /// Bottom-center of the boss hull — where its shots originate.
   double get _bossMuzzleX => activeBoss!.x + activeBoss!.width / 2;
   double get _bossMuzzleY => activeBoss!.y + activeBoss!.height;
@@ -565,6 +596,8 @@ class GameController {
       case BossType.serpentVolley:
         _fireSerpentVolley();
         break;
+      case BossType.swarm:
+        break; // units fire individually via _fireSwarmUnitBullet
     }
   }
 
@@ -826,7 +859,10 @@ class GameController {
 
   void spawnEnemies() {
     // --- Boss spawn check (with per-mode respawn cooldown) ---
-    if (activeBoss == null) {
+    // The Swarm Lords encounter counts as an active boss while any of
+    // its units live.
+    final bossEncounterActive = activeBoss != null || swarmUnitsAlive > 0;
+    if (!bossEncounterActive) {
       if (bossRespawnCooldown > 0) {
         bossRespawnCooldown--;
       } else if (config.shouldSpawnBoss(gameState, asteroidsDestroyed)) {
@@ -834,7 +870,7 @@ class GameController {
         return;
       }
     }
-    if (activeBoss != null) return; // pause other enemy spawns during boss
+    if (bossEncounterActive) return; // pause other enemy spawns during boss
 
     // Probability-table enemies (disabled in Boss Rush — its only
     // minions are the escort carrier's, spawned directly in spawnBoss).
@@ -890,8 +926,84 @@ class GameController {
       }
     }
 
+    // The Swarm Lords: no single hull — 10 small shielded units deploy
+    // in two staggered rows and the marker Boss is discarded. The run's
+    // boss counter still reads "Boss N" via currentWave (set above).
+    if (activeBoss!.bossType == BossType.swarm) {
+      _deploySwarm();
+      activeBoss = null;
+    }
+
     asteroidsDestroyed = 0;
     callbacks.onBossIncoming();
+  }
+
+  /// Deploy the Swarm Lords: 10 small units in two offset rows (a
+  /// beehive arrangement), each with its own patrol direction, bob
+  /// phase, and staggered fire cadence so their shots don't sync up.
+  void _deploySwarm() {
+    final random = Random();
+    const perRow = 5;
+    final usableWidth = screenWidth - GameConfig.swarmUnitSize - 20;
+    final columnGap = usableWidth / (perRow + 1);
+
+    for (int i = 0; i < GameConfig.swarmUnitCount; i++) {
+      final row = i ~/ perRow; // 0 top, 1 bottom (offset by half a column)
+      final col = i % perRow;
+      final x = 10 + columnGap * (col + 1 + (row == 1 ? 0.5 : 0));
+      enemies.add(SwarmUnit(
+        x: x.clamp(0.0, screenWidth - GameConfig.swarmUnitSize),
+        y: -GameConfig.swarmUnitSize - (row == 0 ? 40 : 0), // top row enters first
+        speedX: (random.nextBool() ? 1 : -1) *
+            (GameConfig.swarmUnitSpeed * (0.7 + random.nextDouble() * 0.6)),
+        hoverY: GameConfig.swarmHoverY + row * 55,
+        shootInterval: GameConfig.swarmUnitShootInterval - random.nextInt(50),
+        phase: random.nextDouble() * 2 * pi,
+      ));
+    }
+    swarmUnitsAlive = GameConfig.swarmUnitCount;
+  }
+
+  /// Called when a swarm unit dies — awards its astrids and ends the
+  /// encounter (advancing the boss counter) when the last one falls.
+  void _onSwarmUnitDestroyed(SwarmUnit unit) {
+    swarmUnitsAlive--;
+    if (swarmUnitsAlive > 0) {
+      floatingTexts.add(FloatingText(
+        text: '${swarmUnitsAlive} LEFT',
+        x: unit.x - 10,
+        y: unit.y - 10,
+        color: Colors.deepOrange,
+        lifeTimer: 60,
+        fontSize: 14,
+      ));
+      return;
+    }
+
+    // Last unit down = the "boss" is defeated.
+    gameState.score += ScoreValues.bossSwarm;
+    bossesDefeated++;
+    bossRespawnCooldown = config.bossRespawnDelay;
+    callbacks.onBossDefeatedHaptic();
+    callbacks.onShake(1.0);
+
+    // Drop power-ups from the screen center (no single hull position).
+    for (int i = 0; i < GameConfig.bossPowerUpDropCount; i++) {
+      powerUps.add(PowerUp.randomWeighted(
+        screenWidth / 2 + (i * 40 - 20),
+        screenHeight / 3,
+        config.powerUpWeights,
+      ));
+    }
+
+    floatingTexts.add(FloatingText(
+      text: 'SWARM DEFEATED!',
+      x: screenWidth / 2 - 90,
+      y: screenHeight / 2,
+      color: Colors.yellow,
+      lifeTimer: 180,
+      fontSize: 22,
+    ));
   }
 
   void defeatBoss() {
@@ -1132,6 +1244,20 @@ class GameController {
         if (!bullet.isVisible || !enemy.isVisible) continue;
         if (bullet.collidesWith(enemy)) {
           bullet.isVisible = false;
+
+          // Swarm units carry their own shields — absorb hits first.
+          if (enemy is SwarmUnit && enemy.hasShield) {
+            enemy.damageShield(1);
+            hitEffects.add(HitEffect(
+              x: bullet.x,
+              y: bullet.y,
+              color: Colors.cyan,
+              size: 14,
+            ));
+            callbacks.onHit();
+            break;
+          }
+
           final destroyed = enemy.takeDamage(1);
 
           if (destroyed) {
@@ -1152,6 +1278,9 @@ class GameController {
 
             if (enemy is HugeSlowAsteroid) {
               splitHugeAsteroid(enemy);
+            }
+            if (enemy is SwarmUnit) {
+              _onSwarmUnitDestroyed(enemy);
             }
             tryDropPowerUp(enemy.center.dx, enemy.center.dy);
           } else {
@@ -1208,10 +1337,17 @@ class GameController {
       for (var enemy in enemies) {
         if (!enemy.isVisible) continue;
         if (laser.collidesWith(enemy)) {
+          // Swarm shields absorb the laser too — but it melts them fast
+          // (one frame per hit, so a pass strips shields then hulls).
+          if (enemy is SwarmUnit && enemy.hasShield) {
+            enemy.damageShield(1);
+            continue;
+          }
           if (enemy.takeDamage(1)) {
             gameState.score += enemy.scoreValue;
             asteroidsDestroyed++;
             if (enemy is HugeSlowAsteroid) splitHugeAsteroid(enemy);
+            if (enemy is SwarmUnit) _onSwarmUnitDestroyed(enemy);
             tryDropPowerUp(enemy.center.dx, enemy.center.dy);
           }
         }
