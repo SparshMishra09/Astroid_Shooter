@@ -112,9 +112,10 @@ class AuthService {
 
       if (googleAuth.idToken == null) {
         debugPrint('Google sign-in: idToken is null');
+        // Technical detail (SHA-1 fingerprint registration) is logged
+        // for developers; the player only sees a friendly message.
         throw const AuthException(
-          'Google sign-in failed to produce an ID token. Make sure the '
-          'SHA-1 fingerprint is registered in Firebase Console.',
+          'Google sign-in hit a snag. Please try again in a moment.',
         );
       }
 
@@ -203,7 +204,8 @@ class AuthService {
     return user.displayName ?? 'Pilot';
   }
 
-  /// Convert Firebase error codes to user-friendly messages.
+  /// Convert Firebase error codes to user-friendly messages. Never
+  /// surfaces raw Firebase/plugin error strings to the player.
   String _friendlyMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'weak-password':
@@ -216,17 +218,44 @@ class AuthService {
         return 'No account found with this email.';
       case 'wrong-password':
       case 'invalid-credential':
+      case 'invalid-login-credentials':
         return 'Incorrect email or password.';
+      case 'invalid-verification-code':
+      case 'invalid-verification-id':
+      case 'invalid-action-code':
+      case 'expired-action-code':
+        return 'Verification failed. Please try again.';
+      case 'user-disabled':
+        return 'This account has been disabled. Contact support.';
       case 'too-many-requests':
         return 'Too many attempts. Please wait a moment and try again.';
       case 'network-request-failed':
+      case 'internal-error':
+      case 'api-not-available':
+      case 'channel-error':
         return 'Network error. Check your internet connection.';
       case 'operation-not-allowed':
-        return 'This sign-in method is not enabled. Contact support.';
+      case 'app-not-authorized':
+      case 'unauthorized-domain':
+      case 'missing-android-pkg-name':
+        return 'This sign-in method is not available right now. Please try again later.';
       case 'account-exists-with-different-credential':
+      case 'credential-already-in-use':
         return 'An account already exists with this email using a different sign-in method.';
+      case 'user-token-expired':
+      case 'requires-recent-login':
+        return 'Your session expired. Please sign in again.';
+      case 'no-current-user':
+        return 'You are signed out. Please sign in again.';
+      case 'captcha-check-failed':
+        return 'Security check failed. Please try again.';
+      case 'timeout':
+        return 'The request timed out. Please try again.';
       default:
-        return e.message ?? 'Authentication failed. Please try again.';
+        // Friendly generic — the raw code/message is logged for devs
+        // but never shown to the player.
+        debugPrint('Unhandled auth error ${e.code}: ${e.message}');
+        return 'Something went wrong. Please try again.';
     }
   }
 }

@@ -13,6 +13,7 @@ import '../services/audio_service.dart';
 import '../widgets/space_background.dart';
 import '../widgets/entity_widgets.dart';
 import '../widgets/game_overlays.dart';
+import '../widgets/game_loading_screen.dart';
 import '../widgets/playlist_widgets.dart';
 import '../game/game_controller.dart';
 
@@ -52,6 +53,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool _resultsSubmitted = false;
   // True while results are being saved to Firestore (shows indicator)
   bool _isSavingResults = false;
+
+  /// True while the launch loading screen covers the field — the game
+  /// world initializes behind it so the player never sees the ship
+  /// pop in at mid-screen. Cleared a beat after the first ticks run.
+  bool _showLoading = true;
+  int _warmupTicks = 0;
 
   @override
   void initState() {
@@ -120,6 +127,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   void _gameLoop() {
     if (_controller.gameState.isPaused || _controller.gameState.isGameOver) return;
+
+    // The loading screen covers the field until the world has run a
+    // few real frames (entities spawned, ship positioned) — then it
+    // fades out.
+    if (_showLoading) {
+      _warmupTicks++;
+      if (_warmupTicks >= 30) {
+        setState(() => _showLoading = false);
+      }
+    }
 
     // Update engine trail (sample player's engine position)
     _engineTrailPoints.add(Offset(
@@ -459,6 +476,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   onQuitToMenu: _confirmQuitToMainMenu,
                   onOpenPlaylist: () => showPlaylistSheet(context),
                 ),
+
+              // Launch loading screen — covers the field while the
+              // world warms up, then fades out.
+              AnimatedOpacity(
+                opacity: _showLoading ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 450),
+                child: IgnorePointer(
+                  ignoring: !_showLoading,
+                  child: const GameLoadingScreen(),
+                ),
+              ),
             ],
           ),
         ),

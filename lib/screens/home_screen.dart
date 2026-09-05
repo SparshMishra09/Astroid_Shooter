@@ -420,35 +420,165 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  /// The how-to-play panel: a themed card with icon-led tip rows —
+  /// each row pairs a colored icon chip with a short, scannable tip.
   Widget _buildInstructions() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 40),
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.06), width: 1),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.07),
+            Colors.indigo.withOpacity(0.10),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.cyan.withOpacity(0.15), width: 1),
       ),
-      child: const Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'HOW TO PLAY',
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          // Header
+          const Row(
+            children: [
+              Icon(Icons.school_rounded, color: Colors.cyan, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'HOW TO PLAY',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 10),
-          Text(
-            '• Drag to move — your ship fires automatically\n'
-            '• Destroy asteroids & enemies for astrids, chain hits\n'
-            '  for combo multipliers\n'
-            '• Six power-ups: Shield, Rapid Fire, Triple Shot,\n'
-            '  Laser, Penta Shot ("^" barrage) & Wing Drones\n'
-            '• Power-ups stack — Rapid Fire speeds up Penta Shot!\n'
-            '• CLASSIC RUN: survive waves; a boss arrives every 150 kills\n'
-            '• BOSS RUSH: nine boss variants back-to-back — break\n'
-            '  shields, dodge lasers & bombs, scatter the Swarm Lords\n\n'
-            'Every astrid you earn is saved to your account and ranked\n'
-            'on the global + per-mode leaderboards!',
-            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Color(0x15FFFFFF)),
+          const SizedBox(height: 14),
+
+          // Tip rows
+          _TipRow(
+            icon: Icons.touch_app_rounded,
+            iconColor: Colors.cyan,
+            title: 'Drag to fly',
+            subtitle: 'Your ship fires automatically — just survive',
+          ),
+          _TipRow(
+            icon: Icons.stars_rounded,
+            iconColor: Colors.amber,
+            title: 'Earn astrids',
+            subtitle: 'Chain hits without missing for combo multipliers',
+          ),
+          _TipRow(
+            icon: Icons.bolt_rounded,
+            iconColor: Colors.purpleAccent,
+            title: 'Grab power-ups',
+            subtitle: 'Shield · Rapid Fire · Triple/Penta Shot · Laser · Drones',
+          ),
+          _TipRow(
+            icon: Icons.layers_rounded,
+            iconColor: Colors.tealAccent,
+            title: 'Stack them',
+            subtitle: 'Rapid Fire + Penta Shot = a fast "^" barrage',
+          ),
+          _TipRow(
+            icon: Icons.travel_explore_rounded,
+            iconColor: Colors.lightBlue,
+            title: 'Classic Run',
+            subtitle: 'Survive waves — a boss hunts you every 150 kills',
+          ),
+          _TipRow(
+            icon: Icons.local_fire_department_rounded,
+            iconColor: Colors.redAccent,
+            title: 'Boss Rush',
+            subtitle: 'Nine boss variants back-to-back. Good luck, pilot',
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0x15FFFFFF)),
+          const SizedBox(height: 12),
+
+          // Footer note
+          const Row(
+            children: [
+              Icon(Icons.cloud_upload_rounded,
+                  color: Colors.white38, size: 16),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Every astrid is saved to your account and ranked on the '
+                  'global + per-mode leaderboards',
+                  style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One icon-led tip row in the how-to-play panel.
+class _TipRow extends StatelessWidget {
+  const _TipRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon chip
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: iconColor.withOpacity(0.12),
+              border: Border.all(color: iconColor.withOpacity(0.4), width: 1),
+            ),
+            child: Icon(icon, color: iconColor, size: 17),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11.5,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

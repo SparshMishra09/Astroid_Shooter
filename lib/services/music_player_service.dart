@@ -289,10 +289,25 @@ class MusicPlayerService {
     final i = _queue.indexOf(trackId);
     final j = i + delta;
     if (i == -1 || j < 0 || j >= _queue.length) return;
-    final playingId = currentTrack?.id;
+    await moveTrackTo(i, j);
+  }
 
-    final id = _queue.removeAt(i);
-    _queue.insert(j, id);
+  /// Move the track at [oldIndex] to [newIndex] (drag-and-drop
+  /// reorder; indices are pre-adjusted by ReorderableListView's
+  /// convention where newIndex > oldIndex means "insert after").
+  Future<void> moveTrackTo(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= _queue.length) return;
+    // ReorderableListView passes a newIndex that assumes the item was
+    // already removed — normalize it.
+    var adjusted = newIndex;
+    if (adjusted > oldIndex) adjusted--;
+    if (adjusted == oldIndex || adjusted < 0 || adjusted >= _queue.length) {
+      return;
+    }
+
+    final playingId = currentTrack?.id;
+    final id = _queue.removeAt(oldIndex);
+    _queue.insert(adjusted, id);
 
     // Keep the currently-playing track selected if it moved.
     if (playingId != null) {

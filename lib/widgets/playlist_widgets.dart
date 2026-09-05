@@ -475,25 +475,30 @@ class _PlaylistSheetState extends State<PlaylistSheet> {
 
           Divider(height: 1, color: Colors.white.withOpacity(0.08)),
 
-          // Track list: the queue (in order), then a divider, then the
-          // deselected tracks available to re-add.
+          // Drag-and-drop reorderable list: the queue first (drag rows
+          // to reorder), then the deselected tracks below a divider.
           Expanded(
-            child: ListView.builder(
+            child: ReorderableListView.builder(
               padding: const EdgeInsets.only(bottom: 24),
-              itemCount: queued.length + (deselected.isEmpty ? 0 : deselected.length + 1),
+              itemCount:
+                  queued.length + (deselected.isEmpty ? 0 : deselected.length + 1),
+              onReorder: (oldIndex, newIndex) {
+                // Only moves within the queued section reorder the
+                // playlist; dragging around deselected rows is ignored.
+                if (oldIndex < queued.length) {
+                  music.moveTrackTo(oldIndex, newIndex);
+                }
+              },
               itemBuilder: (context, index) {
                 if (index < queued.length) {
                   final track = queued[index];
                   final isCurrent = current?.id == track.id;
                   return _PlaylistRow(
+                    key: ValueKey('queue-${track.id}'),
                     track: track,
                     isCurrent: isCurrent,
                     isSelected: true,
-                    canMoveUp: index > 0,
-                    canMoveDown: index < queued.length - 1,
                     onPlay: () => music.playTrack(track.id),
-                    onMoveUp: () => music.moveTrack(track.id, -1),
-                    onMoveDown: () => music.moveTrack(track.id, 1),
                     onDeselect: () => music.toggleTrack(track.id),
                   );
                 }
@@ -502,6 +507,7 @@ class _PlaylistSheetState extends State<PlaylistSheet> {
                 final di = index - queued.length;
                 if (di == 0) {
                   return Padding(
+                    key: const ValueKey('deselected-divider'),
                     padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
                     child: Row(
                       children: [
@@ -532,14 +538,11 @@ class _PlaylistSheetState extends State<PlaylistSheet> {
 
                 final track = deselected[di - 1];
                 return _PlaylistRow(
+                  key: ValueKey('out-${track.id}'),
                   track: track,
                   isCurrent: false,
                   isSelected: false,
-                  canMoveUp: false,
-                  canMoveDown: false,
                   onPlay: () => music.toggleTrack(track.id),
-                  onMoveUp: () {},
-                  onMoveDown: () {},
                   onDeselect: () => music.toggleTrack(track.id),
                 );
               },
@@ -551,30 +554,24 @@ class _PlaylistSheetState extends State<PlaylistSheet> {
   }
 }
 
-/// One row in the playlist editor: cover, title, playing indicator,
-/// reorder arrows, and a select/deselect toggle. Deselected rows are
-/// dimmed with a "+" affordance.
+/// One row in the playlist editor: drag handle, cover, title, playing
+/// indicator, and a select/deselect toggle. Rows in the queue are
+/// drag-reorderable via the list; deselected rows are dimmed with a
+/// "+" affordance.
 class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({
+    super.key,
     required this.track,
     required this.isCurrent,
     required this.isSelected,
-    required this.canMoveUp,
-    required this.canMoveDown,
     required this.onPlay,
-    required this.onMoveUp,
-    required this.onMoveDown,
     required this.onDeselect,
   });
 
   final Track track;
   final bool isCurrent;
   final bool isSelected;
-  final bool canMoveUp;
-  final bool canMoveDown;
   final VoidCallback onPlay;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
   final VoidCallback onDeselect;
 
   @override
@@ -597,14 +594,32 @@ class _PlaylistRow extends StatelessWidget {
       child: Opacity(
         opacity: isSelected ? 1.0 : 0.45,
         child: ListTile(
-          contentPadding: const EdgeInsets.only(left: 10, right: 4),
-          leading: GestureDetector(
-            onTap: onPlay,
-            child: _RowCover(
-              coverPath: track.coverPath,
-              accent: track.color,
-              isCurrent: isCurrent,
-            ),
+          contentPadding: const EdgeInsets.only(left: 6, right: 4),
+          // Drag handle (queued rows are long-press draggable anyway —
+          // this makes the affordance discoverable).
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ReorderableDragStartListener(
+                index: 0,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6, right: 4),
+                  child: Icon(
+                    Icons.drag_indicator_rounded,
+                    color: Colors.white.withOpacity(isSelected ? 0.35 : 0.15),
+                    size: 20,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: onPlay,
+                child: _RowCover(
+                  coverPath: track.coverPath,
+                  accent: track.color,
+                  isCurrent: isCurrent,
+                ),
+              ),
+            ],
           ),
           title: GestureDetector(
             onTap: onPlay,
@@ -633,39 +648,17 @@ class _PlaylistRow extends StatelessWidget {
               letterSpacing: isCurrent ? 1.2 : 0,
             ),
           ),
-          // Reorder arrows (queued rows only) + select/deselect toggle
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isSelected)
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _ArrowButton(
-                      icon: Icons.keyboard_arrow_up_rounded,
-                      enabled: canMoveUp,
-                      onTap: onMoveUp,
-                    ),
-                    _ArrowButton(
-                      icon: Icons.keyboard_arrow_down_rounded,
-                      enabled: canMoveDown,
-                      onTap: onMoveDown,
-                    ),
-                  ],
-                ),
-              // Toggle: check (remove) for queued rows, + (add) for the rest.
-              IconButton(
-                icon: Icon(
-                  isSelected
-                      ? Icons.check_circle_rounded
-                      : Icons.add_circle_outline_rounded,
-                  color: isSelected ? track.color : Colors.white54,
-                  size: 22,
-                ),
-                onPressed: onDeselect,
-                tooltip: isSelected ? 'Remove from playlist' : 'Add to playlist',
-              ),
-            ],
+          // Toggle: check (remove) for queued rows, + (add) for the rest.
+          trailing: IconButton(
+            icon: Icon(
+              isSelected
+                  ? Icons.check_circle_rounded
+                  : Icons.add_circle_outline_rounded,
+              color: isSelected ? track.color : Colors.white54,
+              size: 22,
+            ),
+            onPressed: onDeselect,
+            tooltip: isSelected ? 'Remove from playlist' : 'Add to playlist',
           ),
         ),
       ),
@@ -704,35 +697,6 @@ class _RowCover extends StatelessWidget {
                   color: accent, size: 18),
             )
           : null,
-    );
-  }
-}
-
-class _ArrowButton extends StatelessWidget {
-  const _ArrowButton({
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 26,
-      height: 24,
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        iconSize: 18,
-        icon: Icon(
-          icon,
-          color: enabled ? Colors.white54 : Colors.white.withOpacity(0.12),
-        ),
-        onPressed: enabled ? onTap : null,
-      ),
     );
   }
 }

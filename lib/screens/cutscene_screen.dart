@@ -2,13 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
-import 'mode_selection_screen.dart';
+import '../widgets/game_loading_screen.dart';
 
 /// The intro cutscene, shown the first time a logged-in player hits
 /// PLAY each session. Skippable at any time via a button or tap.
 ///
-/// The cutscene only plays once per app session (a static flag) so
-/// returning to the menu and replaying doesn't re-trigger it.
+/// While the video initializes, the themed [GameLoadingScreen] plays
+/// (no separate spinner/continue UI). SKIP — and the video's natural
+/// end — both return to the home screen.
 class CutsceneScreen extends StatefulWidget {
   const CutsceneScreen({super.key});
 
@@ -23,6 +24,7 @@ class _CutsceneScreenState extends State<CutsceneScreen> {
   VideoPlayerController? _controller;
   bool _initialized = false;
   bool _error = false;
+  bool _leaving = false;
   Timer? _hideControlsTimer;
   bool _controlsVisible = true;
 
@@ -52,18 +54,24 @@ class _CutsceneScreenState extends State<CutsceneScreen> {
       setState(() => _initialized = true);
       controller.addListener(() {
         if (!mounted) return;
-        // When playback reaches the end, continue to mode selection.
+        // When playback reaches the end, head back home.
         final pos = controller.value.position;
         final dur = controller.value.duration;
         if (dur > Duration.zero && pos >= dur) {
-          _continue();
+          _goHome();
         }
       });
       _scheduleHideControls();
     } catch (e) {
       debugPrint('Cutscene init error: $e');
-      if (mounted) setState(() => _error = true);
+      // Video failed — the themed loading screen keeps playing; give
+      // it a short beat, then head home automatically. No CONTINUE
+      // button needed: the player is never stuck.
       await controller.dispose();
+      if (mounted) {
+        setState(() => _error = true);
+        Timer(const Duration(seconds: 3), _goHome);
+      }
     }
   }
 
@@ -75,14 +83,15 @@ class _CutsceneScreenState extends State<CutsceneScreen> {
     });
   }
 
-  void _continue() {
+  void _goHome() {
+    if (_leaving) return;
+    _leaving = true;
     _hideControlsTimer?.cancel();
-    Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (context) => ModeSelectionScreen(),
-    ));
+    // Back to the game's home screen — the cutscene sits between the
+    // home screen and itself (skipping returns where the player came
+    // from, rather than pushing the mode selection on top).
+    Navigator.of(context).pop();
   }
-
-  void _skip() => _continue();
 
   @override
   void dispose() {
@@ -95,19 +104,22 @@ class _CutsceneScreenState extends State<CutsceneScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: (_error || !_initialized) ? _buildFallback() : GestureDetector(
+      // While the video loads (or failed), the themed launch loading
+      // screen plays — same one the game itself uses.
+      body: (_error || !_initialized)
+          ? const GameLoadingScreen(message: 'ENTERING THE GALAXY')
+          : GestureDetector(
               onTap: _scheduleHideControls,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   // Video
-                  if (_initialized && _controller != null)
-                    Center(
-                      child: AspectRatio(
-                        aspectRatio: _controller!.value.aspectRatio,
-                        child: VideoPlayer(_controller!),
-                      ),
+                  Center(
+                    child: AspectRatio(
+                      aspectRatio: _controller!.value.aspectRatio,
+                      child: VideoPlayer(_controller!),
                     ),
+                  ),
 
                   // Skip button (fades out with the controls)
                   AnimatedPositioned(
@@ -115,7 +127,7 @@ class _CutsceneScreenState extends State<CutsceneScreen> {
                     curve: Curves.easeOut,
                     right: 20,
                     bottom: _controlsVisible ? 28 : -80,
-                    child: _SkipButton(onPressed: _skip),
+                    child: _SkipButton(onPressed: _goHome),
                   ),
 
                   // Subtle vignette so the skip button always reads.
@@ -138,33 +150,6 @@ class _CutsceneScreenState extends State<CutsceneScreen> {
                 ],
               ),
             ),
-    );
-  }
-
-  /// If the video can't load, don't block the player — continue to the
-  /// mode selection immediately (the cutscene is a bonus, not a gate).
-  Widget _buildFallback() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(color: Colors.cyan),
-          const SizedBox(height: 24),
-          const Text(
-            'ENTERING THE GALAXY…',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-              letterSpacing: 3,
-            ),
-          ),
-          const SizedBox(height: 24),
-          TextButton(
-            onPressed: _continue,
-            child: const Text('CONTINUE', style: TextStyle(color: Colors.cyan)),
-          ),
-        ],
-      ),
     );
   }
 }
