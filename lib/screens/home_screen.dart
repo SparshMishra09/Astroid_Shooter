@@ -4,6 +4,8 @@ import '../models/user_progress.dart';
 import '../services/user_progress_service.dart';
 import '../auth/auth_service.dart';
 import '../widgets/loading_screen.dart';
+import '../widgets/playlist_widgets.dart';
+import 'cutscene_screen.dart';
 import 'mode_selection_screen.dart';
 import 'leaderboard_screen.dart';
 
@@ -75,8 +77,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _openModeSelection() {
+    // The intro cutscene plays once per app session — the first PLAY
+    // of the session watches it (skippable), later PLAYs go straight
+    // to mode selection.
+    final destination = CutsceneScreen.playedThisSession
+        ? const ModeSelectionScreen()
+        : const CutsceneScreen();
     Navigator.of(context)
-        .push(MaterialPageRoute(builder: (context) => const ModeSelectionScreen()))
+        .push(MaterialPageRoute(builder: (context) => destination))
         .then((_) => _loadProgress()); // Refresh stats after returning from game
   }
 
@@ -208,6 +216,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   icon: const Icon(Icons.logout, color: Colors.white70),
                   tooltip: 'Sign Out',
                   onPressed: _handleLogout,
+                ),
+              ),
+
+              // Now-playing bar (bottom) — the soundtrack keeps playing
+              // everywhere; tapping the chevron opens the playlist editor.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: NowPlayingBar(
+                  onOpenPlaylist: () => showPlaylistSheet(context),
                 ),
               ),
             ],

@@ -13,6 +13,7 @@ import '../services/audio_service.dart';
 import '../widgets/space_background.dart';
 import '../widgets/entity_widgets.dart';
 import '../widgets/game_overlays.dart';
+import '../widgets/playlist_widgets.dart';
 import '../game/game_controller.dart';
 
 class GameScreen extends StatefulWidget {
@@ -73,7 +74,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
     _controller.initialize();
 
-    _audioService.initialize().then((_) => _audioService.playBackgroundMusic());
+    // Sound effects only — the music playlist (MusicPlayerService) owns
+    // background music and keeps playing across screens.
+    _audioService.initialize();
 
     _loadHighScoreAndStart();
   }
@@ -247,7 +250,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _gameTimer?.cancel();
     _shakeController.dispose();
     _comboFlashController.dispose();
-    _audioService.stopBackgroundMusic();
+    // The music playlist keeps playing after leaving the game screen.
 
     // Persist high score locally as a fallback (the primary save goes to
     // Firestore in _submitGameResults when the game ends).
@@ -425,6 +428,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               // Pause button
               PauseButton(isPaused: c.gameState.isPaused, onPressed: _togglePause),
 
+              // Compact now-playing strip (bottom) — the soundtrack
+              // continues through gameplay; tap the chevron (while
+              // paused) to edit the playlist.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: NowPlayingBar(
+                  onOpenPlaylist: c.gameState.isPaused
+                      ? () => showPlaylistSheet(context)
+                      : () => _togglePause(), // tap opens pause first
+                ),
+              ),
+
               // Wave notifications (wave-based modes only; Boss Rush's
               // stage banner comes from the boss spawn announcement)
               if (c.config.wavesEnabled && c.gameState.showWaveStart)
@@ -447,6 +464,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   onResume: _togglePause,
                   onRestart: _restartGame,
                   onQuitToMenu: _confirmQuitToMainMenu,
+                  onOpenPlaylist: () => showPlaylistSheet(context),
                 ),
             ],
           ),

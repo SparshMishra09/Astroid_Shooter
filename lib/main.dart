@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'auth/auth_gate.dart';
+import 'services/music_player_service.dart';
 
 /// Entry point. Firebase is initialized before the app runs, then the
 /// [AuthGate] routes the user to either the auth screen or the home
-/// screen based on their login state.
+/// screen based on their login state. The soundtrack playlist starts
+/// with the app and keeps playing across every screen.
 void main() async {
   // Ensure Flutter is initialized before any async platform calls
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +30,10 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
+  // Kick off the soundtrack (default: Afterburner Ascent) — fire and
+  // forget so a slow disk read never delays first paint.
+  MusicPlayerService.instance.initialize();
 
   runApp(const AsteroidShooterApp());
 }

@@ -371,10 +371,15 @@ class PauseOverlay extends StatelessWidget {
     required this.onResume,
     required this.onRestart,
     required this.onQuitToMenu,
+    this.onOpenPlaylist,
   });
   final VoidCallback onResume;
   final VoidCallback onRestart;
   final VoidCallback onQuitToMenu;
+
+  /// Opens the music playlist editor (the game stays paused while the
+  /// sheet is open — the soundtrack itself keeps playing).
+  final VoidCallback? onOpenPlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -437,6 +442,17 @@ class PauseOverlay extends StatelessWidget {
                 onPressed: onRestart,
               ),
               const SizedBox(height: 12),
+
+              // Playlist button (music keeps playing while paused)
+              if (onOpenPlaylist != null)
+                _OverlayButton(
+                  label: 'PLAYLIST',
+                  icon: Icons.queue_music_rounded,
+                  gradient: [Colors.purple.shade600, Colors.deepPurple.shade900],
+                  textColor: Colors.white,
+                  onPressed: onOpenPlaylist!,
+                ),
+              if (onOpenPlaylist != null) const SizedBox(height: 12),
 
               // Quit to menu button
               _OverlayButton(
