@@ -17,8 +17,13 @@ import '../game/game_controller.dart';
 
 class GameScreen extends StatefulWidget {
   final GameMode gameMode;
+  final DifficultyLevel difficulty;
 
-  const GameScreen({Key? key, this.gameMode = GameMode.classicRun}) : super(key: key);
+  const GameScreen({
+    Key? key,
+    this.gameMode = GameMode.classicRun,
+    this.difficulty = DifficultyLevel.cadet,
+  }) : super(key: key);
 
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -101,7 +106,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _engineTrailPoints.clear();
 
     _gameTimer?.cancel();
-    _gameTimer = Timer.periodic(GameConfig.gameTickDuration, (_) => _gameLoop());
+    // Difficulty = game speed: the tick duration scales the whole
+    // simulation (entities, bullets, spawns, animations) together.
+    _gameTimer = Timer.periodic(
+      GameConfig.tickDurationFor(widget.difficulty),
+      (_) => _gameLoop(),
+    );
     setState(() {});
   }
 
@@ -398,6 +408,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 player: c.player,
                 mode: c.config,
                 activePowerUps: c.activePowerUps,
+                difficulty: widget.difficulty,
               ),
 
               // Combo

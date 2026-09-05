@@ -20,12 +20,20 @@ class GameHUD extends StatelessWidget {
     required this.player,
     required this.mode,
     required this.activePowerUps,
+    this.difficulty = DifficultyLevel.cadet,
   });
 
   final GameState gameState;
   final Player player;
   final GameModeConfig mode;
   final Map<PowerUpType, ActivePowerUp> activePowerUps;
+  final DifficultyLevel difficulty;
+
+  static const _difficultyStyle = {
+    DifficultyLevel.cadet: (label: 'CADET', color: Color(0xFF4ADE80)),
+    DifficultyLevel.veteran: (label: 'VETERAN', color: Color(0xFFFBBF24)),
+    DifficultyLevel.ace: (label: 'ACE', color: Color(0xFFF87171)),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -52,21 +60,54 @@ class GameHUD extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Mode + Wave badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [
-                      Palette.waveBadgeStart.withOpacity(0.85),
-                      Palette.waveBadgeEnd.withOpacity(0.85),
-                    ]),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Text(
-                    '${mode.displayName} · ${mode.waveLabel} ${gameState.currentWave}',
-                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
+                // Mode + Wave badge, with the difficulty chip beside it
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [
+                          Palette.waveBadgeStart.withOpacity(0.85),
+                          Palette.waveBadgeEnd.withOpacity(0.85),
+                        ]),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: Text(
+                        '${mode.displayName} · ${mode.waveLabel} ${gameState.currentWave}',
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _difficultyStyle[difficulty]!.color.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: _difficultyStyle[difficulty]!.color.withOpacity(0.7),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.speed, size: 12, color: _difficultyStyle[difficulty]!.color),
+                          const SizedBox(width: 4),
+                          Text(
+                            _difficultyStyle[difficulty]!.label,
+                            style: TextStyle(
+                              color: _difficultyStyle[difficulty]!.color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 // Best astrids

@@ -7,6 +7,23 @@ enum GameMode {
   bossRush,
 }
 
+/// Difficulty levels — chosen alongside the game mode.
+///
+/// Difficulty scales the speed of the ENTIRE game (movement, spawns,
+/// attacks, animations) by scaling the game-loop tick rate: the frame
+/// budget per difficulty comes from [GameConfig.tickDurationFor].
+/// [cadet] is the game's original speed.
+enum DifficultyLevel {
+  /// The classic pace — the game's original speed.
+  cadet,
+
+  /// ~30% faster: quicker enemies, faster bosses, less reaction time.
+  veteran,
+
+  /// ~60% faster: everything blisters. For aces only.
+  ace,
+}
+
 /// The temporary power-ups that can drop from destroyed entities.
 enum PowerUpType {
   shield,

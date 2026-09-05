@@ -1,3 +1,5 @@
+import '../models/enums.dart';
+
 /// Central place for all tunable game constants.
 ///
 /// Keeping every magic number here makes the game easy to balance and
@@ -52,7 +54,7 @@ class GameConfig {
   static const int rapidFireBossShootInterval = 12; // ~5 shots/sec
   static const int pentaBeamBossShootInterval = 75; // 1.25s
   static const int marksmanBossShootInterval = 90; // 1.5s
-  static const int marksmanMinionCount = 10; // escorts spawned with boss
+  static const int marksmanMinionCount = 3; // escorts spawned with boss
 
   // --- Shielded burst boss (Bulwark Sentinel) ---
   static const int shieldedBossShieldHealth = 15; // hits to break shield
@@ -162,6 +164,25 @@ class GameConfig {
 
   // --- Game loop ---
   static const Duration gameTickDuration = Duration(milliseconds: 16);
+
+  // --- Difficulty (game speed) ---
+  // The whole game runs on a fixed-step loop; shrinking the step makes
+  // EVERYTHING proportionally faster — entities, bullets, spawns, boss
+  // cycles, animations — without touching a single balance constant.
+  static const Duration cadetTickDuration = Duration(milliseconds: 16); // 1.0x
+  static const Duration veteranTickDuration = Duration(milliseconds: 12); // ~1.33x
+  static const Duration aceTickDuration = Duration(milliseconds: 10); // 1.6x
+
+  static Duration tickDurationFor(DifficultyLevel level) {
+    switch (level) {
+      case DifficultyLevel.cadet:
+        return cadetTickDuration;
+      case DifficultyLevel.veteran:
+        return veteranTickDuration;
+      case DifficultyLevel.ace:
+        return aceTickDuration;
+    }
+  }
 
   // --- Combo system ---
   static const double comboStep = 0.2;
