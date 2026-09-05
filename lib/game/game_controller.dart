@@ -938,25 +938,28 @@ class GameController {
     callbacks.onBossIncoming();
   }
 
-  /// Deploy the Swarm Lords: 10 small units in two offset rows (a
-  /// beehive arrangement), each with its own patrol direction, bob
-  /// phase, and staggered fire cadence so their shots don't sync up.
+  /// Deploy the Swarm Lords: 20 small units in four offset rows (a
+  /// beehive arrangement — alternating rows shifted half a column),
+  /// each with its own patrol direction, bob phase, and staggered fire
+  /// cadence so their shots don't sync up. Deeper rows hang lower and
+  /// enter after the front rows.
   void _deploySwarm() {
     final random = Random();
-    const perRow = 5;
+    const perRow = GameConfig.swarmUnitsPerRow;
     final usableWidth = screenWidth - GameConfig.swarmUnitSize - 20;
     final columnGap = usableWidth / (perRow + 1);
 
     for (int i = 0; i < GameConfig.swarmUnitCount; i++) {
-      final row = i ~/ perRow; // 0 top, 1 bottom (offset by half a column)
+      final row = i ~/ perRow;
       final col = i % perRow;
-      final x = 10 + columnGap * (col + 1 + (row == 1 ? 0.5 : 0));
+      // Odd rows shift half a column — the hive lattice.
+      final x = 10 + columnGap * (col + 1 + (row.isOdd ? 0.5 : 0));
       enemies.add(SwarmUnit(
         x: x.clamp(0.0, screenWidth - GameConfig.swarmUnitSize),
-        y: -GameConfig.swarmUnitSize - (row == 0 ? 40 : 0), // top row enters first
+        y: -GameConfig.swarmUnitSize - row * 40, // rows enter in sequence
         speedX: (random.nextBool() ? 1 : -1) *
             (GameConfig.swarmUnitSpeed * (0.7 + random.nextDouble() * 0.6)),
-        hoverY: GameConfig.swarmHoverY + row * 55,
+        hoverY: GameConfig.swarmHoverY + row * GameConfig.swarmRowGap,
         shootInterval: GameConfig.swarmUnitShootInterval - random.nextInt(50),
         phase: random.nextDouble() * 2 * pi,
       ));

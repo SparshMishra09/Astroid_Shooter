@@ -174,9 +174,11 @@ class EnemyShipWidget extends StatelessWidget {
   }
 }
 
-/// One Swarm Lords unit: a small insectoid pod with a pulsing hexagonal
-/// shield ring while shielded, and exposed sparking innards once the
-/// shield breaks.
+/// One Swarm Lords unit: an evil twin of the PLAYER's ship — the same
+/// dart silhouette with swept wings, cockpit and engine flame, mirrored
+/// to point DOWN and painted in hostile crimson. A pulsing hexagonal
+/// energy shield wraps it until broken; an unshielded unit shows a
+/// brighter eye and battle damage sparks.
 class SwarmUnitWidget extends StatelessWidget {
   const SwarmUnitWidget({super.key, required this.unit, required this.frameCount});
   final SwarmUnit unit;
@@ -218,17 +220,16 @@ class _SwarmUnitPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final cx = w / 2;
-    final cy = h / 2;
     final pulse = 0.5 + 0.5 * sin(frameCount * 0.1 + phase);
 
     // --- Shield ring (hex) while shielded ---
     if (hasShield) {
-      final radius = w * 0.72 + pulse * 2;
+      final radius = w * 0.78 + pulse * 2;
       final hex = Path();
       for (int i = 0; i < 6; i++) {
         final a = i * pi / 3 - pi / 6;
         final px = cx + cos(a) * radius;
-        final py = cy + sin(a) * radius;
+        final py = h / 2 + sin(a) * radius;
         if (i == 0) {
           hex.moveTo(px, py);
         } else {
@@ -240,7 +241,7 @@ class _SwarmUnitPainter extends CustomPainter {
       canvas.drawPath(
         hex,
         Paint()
-          ..color = Colors.cyan.withOpacity(0.08 + 0.06 * pulse)
+          ..color = Colors.cyan.withOpacity(0.10 + 0.06 * pulse)
           ..style = PaintingStyle.fill,
       );
       canvas.drawPath(
@@ -254,65 +255,122 @@ class _SwarmUnitPainter extends CustomPainter {
       for (int i = 0; i < 6; i++) {
         final a = i * pi / 3 - pi / 6;
         canvas.drawCircle(
-          Offset(cx + cos(a) * radius, cy + sin(a) * radius),
+          Offset(cx + cos(a) * radius, h / 2 + sin(a) * radius),
           1.8,
           Paint()..color = Colors.cyan.withOpacity(0.6 + 0.4 * pulse),
         );
       }
     }
 
-    // --- Body: insectoid pod pointing down ---
-    final body = Path()
-      ..moveTo(cx, h * 0.95) // stinger tip
-      ..quadraticBezierTo(cx + w * 0.55, h * 0.55, cx + w * 0.34, h * 0.22)
-      ..quadraticBezierTo(cx, h * 0.02, cx - w * 0.34, h * 0.22)
-      ..quadraticBezierTo(cx - w * 0.55, h * 0.55, cx, h * 0.95)
+    // === Evil-twin hull: the player ship's dart, mirrored DOWN ===
+    // Same geometry as spaceship.svg, flipped vertically and scaled.
+    // Player: M25,5 L35,40 L25,35 L15,40 → mirrored about the center.
+    final hull = Path()
+      ..moveTo(cx, h * 0.90) // nose tip (bottom — points at the player)
+      ..lineTo(cx + w * 0.22, h * 0.16) // right shoulder
+      ..lineTo(cx, h * 0.28) // notch (mirrored cockpit keel)
+      ..lineTo(cx - w * 0.22, h * 0.16) // left shoulder
       ..close();
 
     canvas.drawPath(
-      body,
+      hull,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [const Color(0xFF7C3AED), const Color(0xFF4C1D95)],
+          colors: const [Color(0xFF6B1A1F), Color(0xFF8C2730)],
         ).createShader(Rect.fromLTWH(0, 0, w, h)),
     );
     canvas.drawPath(
-      body,
+      hull,
       Paint()
-        ..color = Colors.deepPurple.shade900
+        ..color = const Color(0xFF1A0808)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
 
-    // Winglets.
-    final wingPaint = Paint()..color = const Color(0xFF9F67FF).withOpacity(0.85);
-    canvas.drawLine(Offset(cx - w * 0.3, h * 0.5), Offset(cx - w * 0.62, h * 0.38), wingPaint);
-    canvas.drawLine(Offset(cx + w * 0.3, h * 0.5), Offset(cx + w * 0.62, h * 0.38), wingPaint);
+    // Swept wings (mirrored from the player's).
+    final wingPaint = Paint()..color = const Color(0xFFB91C1C);
+    final wingStroke = Paint()
+      ..color = const Color(0xFF1A0808)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final leftWing = Path()
+      ..moveTo(cx - w * 0.20, h * 0.40)
+      ..lineTo(cx - w * 0.46, h * 0.16)
+      ..lineTo(cx - w * 0.22, h * 0.30)
+      ..close();
+    final rightWing = Path()
+      ..moveTo(cx + w * 0.20, h * 0.40)
+      ..lineTo(cx + w * 0.46, h * 0.16)
+      ..lineTo(cx + w * 0.22, h * 0.30)
+      ..close();
+    canvas.drawPath(leftWing, wingPaint);
+    canvas.drawPath(leftWing, wingStroke);
+    canvas.drawPath(rightWing, wingPaint);
+    canvas.drawPath(rightWing, wingStroke);
 
-    // Eye — glows brighter when unshielded (aggressive "exposed" state).
+    // Engine flame at the TOP (ship is inverted) — flickering.
+    final flamePulse = 0.7 + 0.3 * sin(frameCount * 0.5 + phase);
+    final flame = Path()
+      ..moveTo(cx - w * 0.07, h * 0.14)
+      ..lineTo(cx, h * 0.02 - flamePulse * 2)
+      ..lineTo(cx + w * 0.07, h * 0.14)
+      ..close();
+    canvas.drawPath(
+      flame,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [
+            const Color(0xFFFF6A00).withOpacity(0.9),
+            const Color(0xFFFFC933).withOpacity(0.5 * flamePulse),
+          ],
+        ).createShader(Rect.fromLTWH(0, 0, w, h * 0.2)),
+    );
+
+    // Cockpit eye — glows brighter when unshielded ("enraged").
+    final eyeRadius = w * 0.11;
+    final eyeGlow = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withOpacity(0.9),
+          const Color(0xFFFF2A2A).withOpacity(hasShield ? 0.75 : 1.0),
+          const Color(0xFFFF2A2A).withOpacity(0.0),
+        ],
+      ).createShader(Rect.fromCircle(center: Offset(cx, h * 0.52), radius: eyeRadius * 2.2));
+    canvas.drawCircle(Offset(cx, h * 0.52), eyeRadius * 2.2, eyeGlow);
     canvas.drawCircle(
-      Offset(cx, h * 0.42),
-      w * 0.14,
-      Paint()..color = Colors.redAccent.withOpacity(hasShield ? 0.75 : 1.0),
+      Offset(cx, h * 0.52),
+      eyeRadius,
+      Paint()..color = const Color(0xFFFF2A2A).withOpacity(hasShield ? 0.85 : 1.0),
     );
     canvas.drawCircle(
-      Offset(cx, h * 0.42),
-      w * 0.06,
-      Paint()..color = Colors.white.withOpacity(0.8),
+      Offset(cx - eyeRadius * 0.25, h * 0.52 - eyeRadius * 0.25),
+      eyeRadius * 0.35,
+      Paint()..color = Colors.white.withOpacity(0.85),
     );
 
-    // Exposed sparking innards once the shield is gone.
+    // Hull panel line (mirrored metallic detail).
+    canvas.drawLine(
+      Offset(cx, h * 0.30),
+      Offset(cx, h * 0.78),
+      Paint()
+        ..color = Colors.black.withOpacity(0.35)
+        ..strokeWidth = 1,
+    );
+
+    // Battle damage sparks once the shield is gone.
     if (!hasShield) {
       final sparkPaint = Paint()
-        ..color = Colors.amber.withOpacity(0.5 + 0.5 * pulse)
+        ..color = Colors.amber.withOpacity(0.4 + 0.6 * pulse)
         ..strokeWidth = 1.2;
       for (int i = 0; i < 3; i++) {
         final a = frameCount * 0.2 + i * 2 * pi / 3;
         canvas.drawLine(
-          Offset(cx, h * 0.65),
-          Offset(cx + cos(a) * w * 0.22, h * 0.65 + sin(a) * h * 0.18),
+          Offset(cx, h * 0.68),
+          Offset(cx + cos(a) * w * 0.20, h * 0.68 + sin(a) * h * 0.16),
           sparkPaint,
         );
       }
