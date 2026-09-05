@@ -219,15 +219,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
 
-              // Now-playing bar (bottom) — the soundtrack keeps playing
-              // everywhere; tapping the chevron opens the playlist editor.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: NowPlayingBar(
-                  onOpenPlaylist: () => showPlaylistSheet(context),
-                ),
+              // Music dock (top-left) — tap the spinning cover to expand
+              // transport controls; the playlist editor opens from there.
+              MusicDock(
+                onOpenPlaylist: () => showPlaylistSheet(context),
               ),
             ],
           ),

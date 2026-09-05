@@ -3,40 +3,51 @@ import 'package:flutter/material.dart';
 import '../services/music_player_service.dart';
 
 // ============================================================
-//  NOW-PLAYING MINI BAR
+//  MUSIC DOCK (top-left, expands horizontally)
 // ============================================================
 
-/// A Spotify-style now-playing bar pinned above the bottom of the
-/// screen (home + gameplay). Shows the cover art, marquee-ish title,
-/// play/pause, and expands into the full playlist editor on tap.
-class NowPlayingBar extends StatefulWidget {
-  const NowPlayingBar({super.key, this.onOpenPlaylist});
+/// A compact music dock pinned to the TOP-LEFT of the screen.
+///
+/// Collapsed: a small circular button (spinning cover art while music
+/// plays) that sits beside the screen's other top-left UI without
+/// overlapping it — pass [leftOffset] to shift it clear of existing
+/// elements (e.g. the game's back/pause buttons).
+///
+/// Expanded: animates horizontally into a pill with prev/play-pause/
+/// next and a playlist button. Auto-collapses after 6s of inactivity.
+class MusicDock extends StatefulWidget {
+  const MusicDock({
+    super.key,
+    this.leftOffset = 0,
+    this.onOpenPlaylist,
+  });
 
-  /// Optional callback for the chevron (opens the playlist editor);
-  /// tapping anywhere else on the bar toggles play/pause.
+  /// Horizontal offset from the left edge, so the dock doesn't overlap
+  /// other top-left UI (back buttons etc.) when collapsed.
+  final double leftOffset;
+
+  /// Opens the full playlist editor sheet.
   final VoidCallback? onOpenPlaylist;
 
   @override
-  State<NowPlayingBar> createState() => _NowPlayingBarState();
+  State<MusicDock> createState() => _MusicDockState();
 }
 
-class _NowPlayingBarState extends State<NowPlayingBar> {
-  StreamSubscription<Duration>? _positionSub;
+class _MusicDockState extends State<MusicDock>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  Timer? _collapseTimer;
 
   @override
   void initState() {
     super.initState();
     MusicPlayerService.instance.addListener(_rebuild);
-    _positionSub =
-        MusicPlayerService.instance.onPositionChanged.listen((_) {
-      if (mounted) setState(() {});
-    });
   }
 
   @override
   void dispose() {
+    _collapseTimer?.cancel();
     MusicPlayerService.instance.removeListener(_rebuild);
-    _positionSub?.cancel();
     super.dispose();
   }
 
@@ -44,102 +55,172 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
     if (mounted) setState(() {});
   }
 
+  void _expand() {
+    setState(() => _expanded = true);
+    _scheduleCollapse();
+  }
+
+  void _scheduleCollapse() {
+    _collapseTimer?.cancel();
+    _collapseTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _expanded = false);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final music = MusicPlayerService.instance;
     final track = music.currentTrack;
 
-    // Hidden entirely when every track is deselected (nothing to show).
+    // Nothing queued — show nothing at all.
     if (track == null) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            track.color.withOpacity(0.22),
-            Colors.black.withOpacity(0.85),
-          ],
+    return Positioned(
+      top: 12,
+      left: 12 + widget.leftOffset,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.centerLeft,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            color: Colors.black.withOpacity(_expanded ? 0.88 : 0.62),
+            border: Border.all(
+              color: track.color.withOpacity(_expanded ? 0.55 : 0.4),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: track.color.withOpacity(_expanded ? 0.35 : 0.25),
+                blurRadius: _expanded ? 16 : 10,
+              ),
+            ],
+          ),
+          child: _expanded ? _buildExpanded(track) : _buildCollapsed(track),
         ),
-        border: Border.all(color: track.color.withOpacity(0.35), width: 1),
-        boxShadow: [
-          BoxShadow(color: track.color.withOpacity(0.2), blurRadius: 14),
-        ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                // Cover art (spinning vinyl while playing)
-                _SpinningCover(
-                  coverPath: track.coverPath,
-                  accent: track.color,
-                  isPlaying: music.isPlaying,
-                ),
-                const SizedBox(width: 10),
+    );
+  }
 
-                // Title + artist
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        music.isPlaying ? 'NOW PLAYING' : 'PAUSED',
-                        style: TextStyle(
-                          color: track.color.withOpacity(0.8),
-                          fontSize: 10,
-                          letterSpacing: 1.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+  /// Collapsed: spinning cover button.
+  Widget _buildCollapsed(Track track) {
+    return GestureDetector(
+      onTap: _expand,
+      child: _SpinningCover(
+        coverPath: track.coverPath,
+        accent: track.color,
+        isPlaying: MusicPlayerService.instance.isPlaying,
+        size: 40,
+      ),
+    );
+  }
+
+  /// Expanded: cover + transport controls + playlist button.
+  Widget _buildExpanded(Track track) {
+    final music = MusicPlayerService.instance;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Cover (tap to collapse)
+        GestureDetector(
+          onTap: () => setState(() => _expanded = false),
+          child: _SpinningCover(
+            coverPath: track.coverPath,
+            accent: track.color,
+            isPlaying: music.isPlaying,
+            size: 40,
+          ),
+        ),
+
+        // Title
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 110),
+          child: Padding(
+            padding: const EdgeInsets.only(left: 4, right: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  track.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
                 ),
-
-                // Prev / play-pause / next
-                IconButton(
-                  icon: Icon(Icons.skip_previous_rounded,
-                      color: Colors.white.withOpacity(0.8), size: 26),
-                  onPressed: () => music.skipPrevious(),
-                ),
-                _PlayPauseButton(
-                  isPlaying: music.isPlaying,
-                  accent: track.color,
-                  onPressed: () => music.togglePause(),
-                ),
-                IconButton(
-                  icon: Icon(Icons.skip_next_rounded,
-                      color: Colors.white.withOpacity(0.8), size: 26),
-                  onPressed: () => music.skipNext(),
-                ),
-
-                // Expand into the playlist editor
-                IconButton(
-                  icon: Icon(Icons.keyboard_arrow_up_rounded,
-                      color: track.color, size: 28),
-                  onPressed: widget.onOpenPlaylist,
+                Text(
+                  music.isPlaying ? 'NOW PLAYING' : 'PAUSED',
+                  style: TextStyle(
+                    color: track.color.withOpacity(0.85),
+                    fontSize: 8,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
-          ],
+          ),
         ),
+
+        // Transport controls
+        _DockIcon(
+          icon: Icons.skip_previous_rounded,
+          onTap: () {
+            music.skipPrevious();
+            _scheduleCollapse();
+          },
+        ),
+        _PlayPauseButton(
+          isPlaying: music.isPlaying,
+          accent: track.color,
+          size: 30,
+          onPressed: () {
+            music.togglePause();
+            _scheduleCollapse();
+          },
+        ),
+        _DockIcon(
+          icon: Icons.skip_next_rounded,
+          onTap: () {
+            music.skipNext();
+            _scheduleCollapse();
+          },
+        ),
+        _DockIcon(
+          icon: Icons.queue_music_rounded,
+          onTap: () {
+            setState(() => _expanded = false);
+            widget.onOpenPlaylist?.call();
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// Small icon button used inside the expanded dock.
+class _DockIcon extends StatelessWidget {
+  const _DockIcon({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 32,
+      height: 40,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: 20,
+        icon: Icon(icon, color: Colors.white.withOpacity(0.85)),
+        onPressed: onTap,
       ),
     );
   }
@@ -151,11 +232,13 @@ class _SpinningCover extends StatefulWidget {
     required this.coverPath,
     required this.accent,
     required this.isPlaying,
+    this.size = 44,
   });
 
   final String coverPath;
   final Color accent;
   final bool isPlaying;
+  final double size;
 
   @override
   State<_SpinningCover> createState() => _SpinningCoverState();
@@ -194,12 +277,12 @@ class _SpinningCoverState extends State<_SpinningCover>
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(5),
       child: RotationTransition(
         turns: _spin,
         child: Container(
-          width: 44,
-          height: 44,
+          width: widget.size,
+          height: widget.size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             image: DecorationImage(
@@ -213,8 +296,8 @@ class _SpinningCoverState extends State<_SpinningCover>
           // Vinyl center dot
           child: Center(
             child: Container(
-              width: 10,
-              height: 10,
+              width: 9,
+              height: 9,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.black.withOpacity(0.75),
@@ -233,17 +316,19 @@ class _PlayPauseButton extends StatelessWidget {
     required this.isPlaying,
     required this.accent,
     required this.onPressed,
+    this.size = 40,
   });
 
   final bool isPlaying;
   final Color accent;
   final VoidCallback onPressed;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 40,
-      height: 40,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(colors: [accent, accent.withOpacity(0.6)]),
@@ -261,7 +346,7 @@ class _PlayPauseButton extends StatelessWidget {
             isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
             key: ValueKey(isPlaying),
             color: Colors.white,
-            size: 26,
+            size: size * 0.65,
           ),
         ),
         onPressed: onPressed,

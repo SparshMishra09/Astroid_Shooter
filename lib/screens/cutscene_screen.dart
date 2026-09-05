@@ -39,7 +39,7 @@ class _CutsceneScreenState extends State<CutsceneScreen> {
 
   Future<void> _initVideo() async {
     final controller =
-        VideoPlayerController.asset('assets/cutscenes/starting scene 1.mp4');
+        VideoPlayerController.asset('assets/cutscenes/starting_scene_1.mp4');
     try {
       await controller.initialize();
       _controller = controller;

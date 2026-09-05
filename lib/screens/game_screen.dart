@@ -428,18 +428,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               // Pause button
               PauseButton(isPaused: c.gameState.isPaused, onPressed: _togglePause),
 
-              // Compact now-playing strip (bottom) — the soundtrack
-              // continues through gameplay; tap the chevron (while
-              // paused) to edit the playlist.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: NowPlayingBar(
-                  onOpenPlaylist: c.gameState.isPaused
-                      ? () => showPlaylistSheet(context)
-                      : () => _togglePause(), // tap opens pause first
-                ),
+              // Music dock (top-left, clear of the HUD's left column
+              // which starts ~75px down). The soundtrack continues
+              // through gameplay; the playlist editor opens from here.
+              MusicDock(
+                onOpenPlaylist: () => showPlaylistSheet(context),
               ),
 
               // Wave notifications (wave-based modes only; Boss Rush's

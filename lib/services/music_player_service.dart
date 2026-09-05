@@ -221,7 +221,11 @@ class MusicPlayerService {
     }
     try {
       await _player.setReleaseMode(ReleaseMode.stop);
-      await _player.play(AssetSource(track.assetPath));
+      // audioplayers' AssetSource resolves relative to its own 'assets/'
+      // prefix — passing the full 'assets/audio/...' path would double
+      // the prefix and fail to find the file, so strip it here.
+      final relative = track.assetPath.replaceFirst('assets/', '');
+      await _player.play(AssetSource(relative));
       _isPlaying = true;
     } catch (e) {
       debugPrint('MusicPlayerService play error: $e');

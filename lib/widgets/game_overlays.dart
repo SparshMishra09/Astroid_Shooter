@@ -54,7 +54,9 @@ class GameHUD extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 20),
+          // 62px gap leaves room for the music dock (top-left) before
+          // the left-side HUD column starts.
+          const SizedBox(height: 62),
           Padding(
             padding: const EdgeInsets.only(left: 10),
             child: Column(
