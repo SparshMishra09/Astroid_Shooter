@@ -52,7 +52,7 @@ class GameConfig {
   static const int rapidFireBossShootInterval = 12; // ~5 shots/sec
   static const int pentaBeamBossShootInterval = 75; // 1.25s
   static const int marksmanBossShootInterval = 90; // 1.5s
-  static const int marksmanMinionCount = 3; // escorts spawned with boss
+  static const int marksmanMinionCount = 10; // escorts spawned with boss
 
   // --- Shielded burst boss (Bulwark Sentinel) ---
   static const int shieldedBossShieldHealth = 15; // hits to break shield

@@ -99,7 +99,9 @@ class GameController {
   List<Bullet> bullets = [];
   List<Enemy> enemies = [];
   List<EnemyBullet> enemyBullets = [];
-  Boss? activeBoss;
+  /// Active bosses — normally one, but Boss Rush's twin-tri-beam rolls
+  /// two simultaneously (both must die before the next spawn).
+  List<Boss> activeBosses = [];
   List<BombBarrel> bombBarrels = [];
   List<PowerUp> powerUps = [];
   Map<PowerUpType, ActivePowerUp> activePowerUps = {};
@@ -186,7 +188,7 @@ class GameController {
     bullets.clear();
     enemies.clear();
     enemyBullets.clear();
-    activeBoss = null;
+    activeBosses.clear();
     bombBarrels.clear();
     powerUps.clear();
     laserBeams.clear();
@@ -514,23 +516,23 @@ class GameController {
       }
     }
 
-    if (activeBoss != null) {
-      activeBoss!.update(screenHeight, screenWidth);
+    for (var boss in activeBosses) {
+      boss.update(screenHeight, screenWidth);
 
       // Per-frame attack state for the two stateful variants.
-      switch (activeBoss!.bossType) {
+      switch (boss.bossType) {
         case BossType.shieldedBurst:
-          _tickBossBurst();
+          _tickBossBurst(boss);
           break;
         case BossType.laserCannon:
-          _tickBossLaser();
+          _tickBossLaser(boss);
           break;
         default:
           break;
       }
 
-      if (activeBoss!.shouldShoot()) {
-        fireBossAttack();
+      if (boss.shouldShoot()) {
+        fireBossAttack(boss);
       }
     }
   }
@@ -564,37 +566,36 @@ class GameController {
     ));
   }
 
-  /// Bottom-center of the boss hull — where its shots originate.
-  double get _bossMuzzleX => activeBoss!.x + activeBoss!.width / 2;
-  double get _bossMuzzleY => activeBoss!.y + activeBoss!.height;
+  /// Bottom-center of a boss hull — where its shots originate.
+  double _bossMuzzleX(Boss boss) => boss.x + boss.width / 2;
+  double _bossMuzzleY(Boss boss) => boss.y + boss.height;
 
-  /// Dispatch the active boss's attack pattern by variant.
-  void fireBossAttack() {
-    if (activeBoss == null) return;
-    switch (activeBoss!.bossType) {
+  /// Dispatch a boss's attack pattern by variant.
+  void fireBossAttack(Boss boss) {
+    switch (boss.bossType) {
       case BossType.triBeam:
-        _fireTriBeam();
+        _fireTriBeam(boss);
         break;
       case BossType.rapidFire:
-        _fireRapidShot();
+        _fireRapidShot(boss);
         break;
       case BossType.pentaBeam:
-        _firePentaBeam();
+        _firePentaBeam(boss);
         break;
       case BossType.marksman:
-        _fireAimedShot();
+        _fireAimedSpread(boss);
         break;
       case BossType.shieldedBurst:
-        _startBossBurst();
+        _startBossBurst(boss);
         break;
       case BossType.laserCannon:
-        _startBossLaserCharge();
+        _startBossLaserCharge(boss);
         break;
       case BossType.bombardier:
-        _fireBombBarrels();
+        _fireBombBarrels(boss);
         break;
       case BossType.serpentVolley:
-        _fireSerpentVolley();
+        _fireSerpentVolley(boss);
         break;
       case BossType.swarm:
         break; // units fire individually via _fireSwarmUnitBullet
@@ -602,12 +603,12 @@ class GameController {
   }
 
   /// 3-way spread — the original dreadnought pattern.
-  void _fireTriBeam() {
+  void _fireTriBeam(Boss boss) {
     for (int i = -1; i <= 1; i++) {
       final angle = i * 20 * (pi / 180);
       enemyBullets.add(EnemyBullet(
-        x: _bossMuzzleX - 5,
-        y: _bossMuzzleY,
+        x: _bossMuzzleX(boss) - 5,
+        y: _bossMuzzleY(boss),
         width: 10,
         height: 15,
         speedY: cos(angle) * GameConfig.bossBulletSpeed,
@@ -617,12 +618,12 @@ class GameController {
   }
 
   /// 5-way spread from the penta-beam variant.
-  void _firePentaBeam() {
+  void _firePentaBeam(Boss boss) {
     for (int i = -2; i <= 2; i++) {
       final angle = i * 18 * (pi / 180);
       enemyBullets.add(EnemyBullet(
-        x: _bossMuzzleX - 5,
-        y: _bossMuzzleY,
+        x: _bossMuzzleX(boss) - 5,
+        y: _bossMuzzleY(boss),
         width: 10,
         height: 15,
         speedY: cos(angle) * GameConfig.bossBulletSpeed,
@@ -633,40 +634,45 @@ class GameController {
 
   /// Single fast bullet straight down — the rapid-fire hose compensates
   /// volume with a higher speed so it can't be ignored.
-  void _fireRapidShot() {
+  void _fireRapidShot(Boss boss) {
     enemyBullets.add(EnemyBullet(
-      x: _bossMuzzleX - 5,
-      y: _bossMuzzleY,
+      x: _bossMuzzleX(boss) - 5,
+      y: _bossMuzzleY(boss),
       width: 10,
       height: 15,
       speedY: GameConfig.bossBulletSpeed * 1.3,
     ));
   }
 
-  /// Single shot aimed directly at the player — the escort carrier's
-  /// precision attack (its minions supply the spread pressure).
-  void _fireAimedShot() {
-    final dx = (player.x + player.width / 2) - _bossMuzzleX;
-    final dy = (player.y + player.height / 2) - _bossMuzzleY;
+  /// The escort carrier's main gun: a 5-bullet fan centered on the
+  /// player — precision pressure on top of its minion swarm.
+  void _fireAimedSpread(Boss boss) {
+    final mx = _bossMuzzleX(boss);
+    final my = _bossMuzzleY(boss);
+    final dx = (player.x + player.width / 2) - mx;
+    final dy = (player.y + player.height / 2) - my;
     final len = sqrt(dx * dx + dy * dy);
     if (len < 1) return; // avoid division by ~0 when overlapping
-    enemyBullets.add(EnemyBullet(
-      x: _bossMuzzleX - 5,
-      y: _bossMuzzleY,
-      width: 10,
-      height: 15,
-      speedY: (dy / len) * GameConfig.bossBulletSpeed,
-      speedX: (dx / len) * GameConfig.bossBulletSpeed,
-    ));
+    final baseAngle = atan2(dx, dy); // 0 = straight down toward player
+    for (int i = -2; i <= 2; i++) {
+      final angle = baseAngle + i * 12 * (pi / 180);
+      enemyBullets.add(EnemyBullet(
+        x: mx - 5,
+        y: my,
+        width: 10,
+        height: 15,
+        speedY: cos(angle) * GameConfig.bossBulletSpeed,
+        speedX: sin(angle) * GameConfig.bossBulletSpeed,
+      ));
+    }
   }
 
   /// Start the Bulwark Sentinel's burst: lock the aim line at the
   /// player, then fire 10 bullets along it (one every few frames) so
   /// the stream travels as a single dodgeable line.
-  void _startBossBurst() {
-    final boss = activeBoss!;
-    final dx = (player.x + player.width / 2) - _bossMuzzleX;
-    final dy = (player.y + player.height / 2) - _bossMuzzleY;
+  void _startBossBurst(Boss boss) {
+    final dx = (player.x + player.width / 2) - _bossMuzzleX(boss);
+    final dy = (player.y + player.height / 2) - _bossMuzzleY(boss);
     final len = sqrt(dx * dx + dy * dy);
     if (len < 1) {
       boss.burstDirX = 0;
@@ -681,15 +687,14 @@ class GameController {
 
   /// Emit one bullet of the pending burst, all sharing the locked aim
   /// direction so the string travels as a single dodgeable line.
-  void _tickBossBurst() {
-    final boss = activeBoss!;
+  void _tickBossBurst(Boss boss) {
     if (boss.burstShotsRemaining <= 0 || frameCount < boss.burstNextShotFrame) {
       return;
     }
     final speed = GameConfig.bossBulletSpeed * 1.2;
     enemyBullets.add(EnemyBullet(
-      x: _bossMuzzleX - 5,
-      y: _bossMuzzleY,
+      x: _bossMuzzleX(boss) - 5,
+      y: _bossMuzzleY(boss),
       width: 10,
       height: 15,
       speedY: boss.burstDirY * speed,
@@ -701,8 +706,7 @@ class GameController {
 
   /// Begin the Void Lancer's laser cycle: 1s charge telegraph, then the
   /// beam. The boss freezes in place for the whole sequence.
-  void _startBossLaserCharge() {
-    final boss = activeBoss!;
+  void _startBossLaserCharge(Boss boss) {
     if (boss.laserPhase != BossLaserPhase.idle) return;
     boss.laserPhase = BossLaserPhase.charging;
     boss.laserTimer = GameConfig.bossLaserChargeDuration;
@@ -711,24 +715,23 @@ class GameController {
 
   /// Detect the charge->fire transition and shake the screen when the
   /// beam goes live. Player collision is checked in [checkCollisions].
-  void _tickBossLaser() {
-    final boss = activeBoss!;
+  void _tickBossLaser(Boss boss) {
     if (boss.laserPhase == BossLaserPhase.firing &&
         boss.laserTimer == GameConfig.bossLaserFireDuration) {
       callbacks.onShake(0.7);
     }
   }
 
-  /// Chip the boss's shield. On the breaking hit, a cyan flash + shake
+  /// Chip a boss's shield. On the breaking hit, a cyan flash + shake
   /// makes the shield-down moment read clearly.
-  void _damageBossShield(double x, double y) {
-    activeBoss!.damageShield(1);
+  void _damageBossShield(Boss boss, double x, double y) {
+    boss.damageShield(1);
     hitEffects.add(HitEffect(x: x, y: y, color: Colors.cyan, size: 20));
     callbacks.onHit();
-    if (!activeBoss!.hasShield) {
+    if (!boss.hasShield) {
       explosionEffects.add(ExplosionEffect(
-        x: activeBoss!.x + activeBoss!.width / 2,
-        y: activeBoss!.y + activeBoss!.height / 4,
+        x: boss.x + boss.width / 2,
+        y: boss.y + boss.height / 4,
         particleCount: 16,
         duration: 50,
         colors: [Colors.cyan, Colors.white, Colors.lightBlue],
@@ -748,8 +751,7 @@ class GameController {
   /// Demolition Titan: drop 2 bomb barrels per volley — one from each
   /// wing bay. Barrels fall until they reach the player's level, then
   /// detonate there, so the blast is always a threat to dodge.
-  void _fireBombBarrels() {
-    final boss = activeBoss!;
+  void _fireBombBarrels(Boss boss) {
     final random = Random();
     for (int i = 0; i < GameConfig.bombardierBarrelsPerVolley; i++) {
       final bayX = i == 0
@@ -809,19 +811,21 @@ class GameController {
   /// partner — so the wall snakes toward the player instead of arriving
   /// as one flat line. Horizontal offsets spread the V across the
   /// muzzle so the bullets never stack into a single column.
-  void _fireSerpentVolley() {
+  void _fireSerpentVolley(Boss boss) {
     final count = GameConfig.serpentBulletCount;
     final verticalGap = GameConfig.serpentBulletGap;
     const horizontalGap = 24.0;
     final speed = GameConfig.serpentBulletSpeed;
+    final mx = _bossMuzzleX(boss);
+    final my = _bossMuzzleY(boss);
 
     for (int i = 0; i < count; i++) {
       // Rows above the center bullet: 3,2,1,0,1,2,3 for 7 bullets —
       // bullet 4 lowest, bullets 1/7 highest, exactly per the spec.
       final rowFromCenter = (i - count ~/ 2).abs();
       enemyBullets.add(EnemyBullet(
-        x: _bossMuzzleX - 5 + (i - count ~/ 2) * horizontalGap,
-        y: _bossMuzzleY - rowFromCenter * verticalGap,
+        x: mx - 5 + (i - count ~/ 2) * horizontalGap,
+        y: my - rowFromCenter * verticalGap,
         width: 10,
         height: 15,
         speedY: speed,
@@ -861,7 +865,7 @@ class GameController {
     // --- Boss spawn check (with per-mode respawn cooldown) ---
     // The Swarm Lords encounter counts as an active boss while any of
     // its units live.
-    final bossEncounterActive = activeBoss != null || swarmUnitsAlive > 0;
+    final bossEncounterActive = activeBosses.isNotEmpty || swarmUnitsAlive > 0;
     if (!bossEncounterActive) {
       if (bossRespawnCooldown > 0) {
         bossRespawnCooldown--;
@@ -894,9 +898,9 @@ class GameController {
   }
 
   void spawnBoss() {
-    // The mode decides which boss spawns (classic: the original tri-beam
-    // dreadnought; Boss Rush: a random variant).
-    activeBoss = config.createBoss(bossesDefeated, screenWidth, GameConfig.bossSize);
+    // The mode decides which boss spawns (classic: a random variant
+    // from its pool; Boss Rush: a random variant from its pool).
+    final boss = config.createBoss(bossesDefeated, screenWidth, GameConfig.bossSize);
 
     // In Boss Rush the boss counter replaces the wave number, so the HUD
     // badge reads "Boss Rush · Boss N".
@@ -907,7 +911,7 @@ class GameController {
     // Classic keeps its original announcement; Boss Rush names the variant.
     final announce = config.wavesEnabled
         ? 'BOSS INCOMING!'
-        : '${activeBoss!.displayName}!';
+        : '${boss.displayName}!';
     floatingTexts.add(FloatingText(
       text: announce,
       x: screenWidth / 2 - 100,
@@ -917,21 +921,43 @@ class GameController {
       fontSize: 22,
     ));
 
-    // The escort carrier (marksman) arrives with 3 enemy-fighter
+    // Boss Rush quirk: the tri-beam rolls in as a TWIN pair flanking
+    // the screen — both must die before the next spawn.
+    if (!config.wavesEnabled && boss.bossType == BossType.triBeam) {
+      final twin = Boss.createTyped(BossType.triBeam, screenWidth, GameConfig.bossSize);
+      // Split the arena: left boss patrols the left half, right the right.
+      boss.x = (screenWidth / 2 - boss.width) / 2;
+      boss.speedX = boss.speedX.abs();
+      twin.x = screenWidth - (screenWidth / 2 - twin.width) / 2 - twin.width;
+      twin.speedX = -twin.speedX.abs();
+      activeBosses.addAll([boss, twin]);
+      floatingTexts.add(FloatingText(
+        text: 'TWIN DREADNOUGHTS!',
+        x: screenWidth / 2 - 110,
+        y: screenHeight / 2 - 40,
+        color: Colors.orange,
+        lifeTimer: 180,
+        fontSize: 20,
+      ));
+    } else {
+      activeBosses.add(boss);
+    }
+
+    // The escort carrier (marksman) arrives with enemy-fighter
     // minions that each fire single shots — the same fighters players
     // face in Classic Run.
-    if (activeBoss!.bossType == BossType.marksman) {
+    if (boss.bossType == BossType.marksman) {
       for (int i = 0; i < GameConfig.marksmanMinionCount; i++) {
         enemies.add(EnemyShip.random(screenWidth, GameConfig.enemyShipSize));
       }
     }
 
-    // The Swarm Lords: no single hull — 10 small shielded units deploy
-    // in two staggered rows and the marker Boss is discarded. The run's
-    // boss counter still reads "Boss N" via currentWave (set above).
-    if (activeBoss!.bossType == BossType.swarm) {
+    // The Swarm Lords: no single hull — the shielded units deploy
+    // directly and the marker Boss is discarded. The run's boss
+    // counter still reads "Boss N" via currentWave (set above).
+    if (boss.bossType == BossType.swarm) {
       _deploySwarm();
-      activeBoss = null;
+      activeBosses.clear();
     }
 
     asteroidsDestroyed = 0;
@@ -1009,18 +1035,16 @@ class GameController {
     ));
   }
 
-  void defeatBoss() {
-    if (activeBoss == null) return;
-
-    gameState.score += activeBoss!.scoreValue;
-    bossesDefeated++;
-    bossRespawnCooldown = config.bossRespawnDelay;
-    callbacks.onBossDefeatedHaptic();
+  /// Defeat one boss hull. Encounter-level rewards (boss counter,
+  /// respawn cooldown, banners) only fire when the LAST boss of the
+  /// encounter dies — the twin tri-beams must both fall.
+  void defeatBoss(Boss boss) {
+    gameState.score += boss.scoreValue;
 
     // Big death explosion + shake
     explosionEffects.add(ExplosionEffect(
-      x: activeBoss!.x + activeBoss!.width / 2,
-      y: activeBoss!.y + activeBoss!.height / 2,
+      x: boss.x + boss.width / 2,
+      y: boss.y + boss.height / 2,
       particleCount: 24,
       duration: 90,
     ));
@@ -1029,22 +1053,37 @@ class GameController {
     // Drop power-ups
     for (int i = 0; i < GameConfig.bossPowerUpDropCount; i++) {
       powerUps.add(PowerUp.randomWeighted(
-        activeBoss!.x + activeBoss!.width / 2 + (i * 30 - 15),
-        activeBoss!.y + activeBoss!.height / 2,
+        boss.x + boss.width / 2 + (i * 30 - 15),
+        boss.y + boss.height / 2,
         config.powerUpWeights,
       ));
     }
 
-    floatingTexts.add(FloatingText(
-      text: 'BOSS DEFEATED!',
-      x: screenWidth / 2 - 70,
-      y: screenHeight / 2,
-      color: Colors.yellow,
-      lifeTimer: 180,
-      fontSize: 22,
-    ));
+    activeBosses.remove(boss);
 
-    activeBoss = null;
+    if (activeBosses.isEmpty) {
+      bossesDefeated++;
+      bossRespawnCooldown = config.bossRespawnDelay;
+      callbacks.onBossDefeatedHaptic();
+      floatingTexts.add(FloatingText(
+        text: 'BOSS DEFEATED!',
+        x: screenWidth / 2 - 70,
+        y: screenHeight / 2,
+        color: Colors.yellow,
+        lifeTimer: 180,
+        fontSize: 22,
+      ));
+    } else {
+      // One twin down — tease the survivor.
+      floatingTexts.add(FloatingText(
+        text: 'ONE DOWN, ONE TO GO!',
+        x: screenWidth / 2 - 110,
+        y: screenHeight / 2,
+        color: Colors.orange,
+        lifeTimer: 120,
+        fontSize: 18,
+      ));
+    }
     callbacks.onBossDefeated();
   }
 
@@ -1301,14 +1340,16 @@ class GameController {
         }
       }
 
-      // Bullet vs boss (shielded variants absorb hits until the dome breaks)
-      if (activeBoss != null && activeBoss!.isVisible && bullet.isVisible) {
-        if (bullet.collidesWith(activeBoss!)) {
+      // Bullet vs bosses (shielded variants absorb hits until the dome
+      // breaks)
+      for (var boss in activeBosses) {
+        if (!bullet.isVisible || !boss.isVisible) continue;
+        if (bullet.collidesWith(boss)) {
           bullet.isVisible = false;
-          if (activeBoss!.hasShield) {
-            _damageBossShield(bullet.x, bullet.y);
+          if (boss.hasShield) {
+            _damageBossShield(boss, bullet.x, bullet.y);
           } else {
-            final destroyed = activeBoss!.takeDamage(1);
+            final destroyed = boss.takeDamage(1);
             hitEffects.add(HitEffect(
               x: bullet.x,
               y: bullet.y,
@@ -1316,9 +1357,10 @@ class GameController {
               size: 18,
             ));
             if (destroyed) {
-              defeatBoss();
+              defeatBoss(boss);
             }
           }
+          break;
         }
       }
     }
@@ -1356,12 +1398,13 @@ class GameController {
         }
       }
 
-      if (activeBoss != null && activeBoss!.isVisible) {
-        if (laser.collidesWith(activeBoss!)) {
-          if (activeBoss!.hasShield) {
-            _damageBossShield(laser.x, activeBoss!.y + activeBoss!.height / 2);
-          } else if (activeBoss!.takeDamage(1)) {
-            defeatBoss();
+      for (var boss in activeBosses) {
+        if (!boss.isVisible) continue;
+        if (laser.collidesWith(boss)) {
+          if (boss.hasShield) {
+            _damageBossShield(boss, laser.x, boss.y + boss.height / 2);
+          } else if (boss.takeDamage(1)) {
+            defeatBoss(boss);
           }
         }
       }
@@ -1393,23 +1436,26 @@ class GameController {
       }
     }
 
-    // --- Player vs boss ---
-    if (activeBoss != null && activeBoss!.isVisible) {
-      if (player.collidesWith(activeBoss!)) {
+    // --- Player vs bosses ---
+    for (var boss in activeBosses) {
+      if (boss.isVisible && player.collidesWith(boss)) {
         handlePlayerHit();
+        break;
       }
     }
 
-    // --- Player vs boss laser beam (Void Lancer) ---
-    // A vertical instant-kill column under the boss while it fires.
-    if (activeBoss != null && activeBoss!.laserPhase == BossLaserPhase.firing) {
-      final beamCenter = activeBoss!.x + activeBoss!.width / 2;
+    // --- Player vs boss laser beams (Void Lancer) ---
+    // A vertical instant-kill column under each firing boss.
+    for (var boss in activeBosses) {
+      if (boss.laserPhase != BossLaserPhase.firing) continue;
+      final beamCenter = boss.x + boss.width / 2;
       final halfBeam = GameConfig.bossLaserWidth / 2;
-      final beamTop = activeBoss!.y + activeBoss!.height;
+      final beamTop = boss.y + boss.height;
       if (player.x < beamCenter + halfBeam &&
           player.x + player.width > beamCenter - halfBeam &&
           player.y + player.height > beamTop) {
         _hitPlayerWithBossLaser();
+        break;
       }
     }
 

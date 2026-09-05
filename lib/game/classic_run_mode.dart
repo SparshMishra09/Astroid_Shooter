@@ -54,9 +54,22 @@ class ClassicRunMode extends GameModeConfig {
   @override
   int getPowerUpSpawnInterval(GameState state) => 1 << 30; // unused
 
+  /// The bosses this mode may summon at the 150-kill threshold, with
+  /// equal odds. Explicit list so Boss Rush exclusives (laser cannon,
+  /// swarm) never leak into Classic.
+  static const List<BossType> _bossPool = [
+    BossType.triBeam,
+    BossType.pentaBeam,
+    BossType.serpentVolley,
+    BossType.shieldedBurst,
+    BossType.marksman,
+    BossType.bombardier,
+  ];
+
   @override
   Boss createBoss(int bossesDefeated, double screenWidth, double bossSize) {
-    return Boss.create(screenWidth, bossSize);
+    final type = _bossPool[Random().nextInt(_bossPool.length)];
+    return Boss.createTyped(type, screenWidth, bossSize);
   }
 
   // getShotInterval: inherited shared implementation (rapid fire halves

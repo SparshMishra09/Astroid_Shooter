@@ -374,14 +374,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       for (var b in c.bombBarrels)
                         BombBarrelWidget(barrel: b, frameCount: c.frameCount),
 
-                      // Boss
-                      if (c.activeBoss != null) BossWidget(boss: c.activeBoss!, frameCount: c.frameCount),
+                      // Bosses (normally one; Boss Rush twins the tri-beam)
+                      for (var boss in c.activeBosses)
+                        BossWidget(boss: boss, frameCount: c.frameCount),
 
-                      // Void Lancer's laser beam (renders the charge
-                      // telegraph + lethal beam under the boss)
-                      if (c.activeBoss != null)
+                      // Void Lancers' laser beams (charge telegraph +
+                      // lethal beam under each firing boss)
+                      for (var boss in c.activeBosses)
                         BossLaserBeamWidget(
-                          boss: c.activeBoss!,
+                          boss: boss,
                           screenHeight: _screenHeight,
                           frameCount: c.frameCount,
                           beamWidth: GameConfig.bossLaserWidth,
